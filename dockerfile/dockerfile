@@ -1,0 +1,16 @@
+FROM aspnmy/debian-ssh:s6-overlay-rc1
+RUN  apt-get install -y openssh-server xz-utils
+
+RUN mkdir /var/run/sshd && $ ssh-keygen -A
+RUN echo 'root:rootadmin' | chpasswd && sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
+
+
+EXPOSE 22
+CMD ["/usr/sbin/sshd", "-D"]
+
+
+ADD tmp/v3.2.0.0/s6-overlay-noarch.tar.xz /tmp
+RUN tar -C / -Jxpf ./tmp/s6-overlay-noarch.tar.xz
+ADD tmp/v3.2.0.0/s6-overlay-x86_64.tar.xz /tmp
+RUN tar -C / -Jxpf ./tmp/s6-overlay-x86_64.tar.xz
+ENTRYPOINT ["/init"]
