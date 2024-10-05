@@ -1,6 +1,6 @@
 FROM docker.io/library/debian:latest
 # 安装SSH服务
-RUN apt-get update && apt-get install -y openssh-server
+RUN apt-get update && apt-get install -y openssh-server xz-utils
 # 创建SSH配置文件 创建SSH密钥
 RUN mkdir /var/run/sshd && ssh-keygen -A
 # 设置root用户密码
