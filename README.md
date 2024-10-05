@@ -1,6 +1,8 @@
 # Telegrarcm 交流
 [Telegrarcm Club](https://t.me/AIisDog)
 
+# 科学上网
+[一点点鸡肠](https://sbairport.com/#/register?code=sTHcpv7y)
 
 # debian_ssh-s6-overlay
 
