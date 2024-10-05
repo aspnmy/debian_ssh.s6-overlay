@@ -1,16 +1,20 @@
-FROM aspnmy/debian-ssh:s6-overlay-rc1
-RUN  apt-get install -y openssh-server xz-utils
-
+FROM docker.io/library/debian:latest
+# 安装SSH服务
+RUN apt-get update && apt-get install -y openssh-server
+# 创建SSH配置文件 创建SSH密钥
 RUN mkdir /var/run/sshd && $ ssh-keygen -A
-RUN echo 'root:rootadmin' | chpasswd && sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
-
-
+# 设置root用户密码（可选）
+RUN echo 'root:rootadmin' | chpasswd
+# 配置SSH服务 
+RUN sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && sed -i 's/#StrictModes yes/StrictModes no/' /etc/ssh/sshd_config
+# 配置端口并启动服务
 EXPOSE 22
 CMD ["/usr/sbin/sshd", "-D"]
-
-
+# 安装 s6-overlay服务
 ADD tmp/v3.2.0.0/s6-overlay-noarch.tar.xz /tmp
 RUN tar -C / -Jxpf ./tmp/s6-overlay-noarch.tar.xz
 ADD tmp/v3.2.0.0/s6-overlay-x86_64.tar.xz /tmp
 RUN tar -C / -Jxpf ./tmp/s6-overlay-x86_64.tar.xz
 ENTRYPOINT ["/init"]
+
+
