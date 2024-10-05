@@ -10,11 +10,7 @@ RUN sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/
 # 配置端口并启动服务
 EXPOSE 22
 CMD ["/usr/sbin/sshd", "-D"]
-# 安装 s6-overlay服务
-ADD tmp/v3.2.0.0/s6-overlay-noarch.tar.xz /tmp
-RUN tar -C / -Jxpf ./tmp/s6-overlay-noarch.tar.xz
-ADD tmp/v3.2.0.0/s6-overlay-x86_64.tar.xz /tmp
-RUN tar -C / -Jxpf ./tmp/s6-overlay-x86_64.tar.xz
+
 ENTRYPOINT ["/init"]
 
 
