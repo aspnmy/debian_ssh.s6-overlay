@@ -1,4 +1,4 @@
-FROM aspnmy/deban:base
+FROM aspnmy/debian:base
 ARG S6_OVERLAY_VERSION=3.2.0.0
 # 安装基础工具
 RUN apt-get update && apt-get install -y  xz-utils ca-certificates
