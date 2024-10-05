@@ -1,4 +1,4 @@
-FROM docker.io/library/debian:latest
+FROM aspnmy/debian:s6-overlay-v12.7
 # 安装SSH服务
 
 ADD build_ite.sh /tmp
