@@ -1,10 +1,12 @@
-FROM docker.io/library/debian:latest
-# 安装SSH服务
-RUN apt-get update && apt-get install -y xz-utils
-# 安装 s6-overlay服务
-ADD tmp/v3.2.0.0/s6-overlay-noarch.tar.xz /tmp
-RUN tar -C / -Jxpf ./tmp/s6-overlay-noarch.tar.xz
-ADD tmp/v3.2.0.0/s6-overlay-x86_64.tar.xz /tmp
-RUN tar -C / -Jxpf ./tmp/s6-overlay-x86_64.tar.xz
+FROM aspnmy/deban:base
+ARG S6_OVERLAY_VERSION=3.2.0.0
+
+RUN apt-get update && apt-get install -y nginx xz-utils
+
+# github下载最新版
+ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz /tmp
+ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-x86_64.tar.xz /tmp
+RUN tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz
+RUN tar -C / -Jxpf /tmp/s6-overlay-x86_64.tar.xz
 ENTRYPOINT ["/init"]
 
