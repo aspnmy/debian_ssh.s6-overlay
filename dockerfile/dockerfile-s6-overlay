@@ -1,9 +1,11 @@
 FROM aspnmy/deban:base
 ARG S6_OVERLAY_VERSION=3.2.0.0
+# 安装基础工具
+RUN apt-get update && apt-get install -y  xz-utils ca-certificates
+# 清理缓存以减少镜像大小
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
-RUN apt-get update && apt-get install -y nginx xz-utils
-
-# github下载最新版
+# 安装s6-overlay github下载最新版
 ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz /tmp
 ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-x86_64.tar.xz /tmp
 RUN tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz
