@@ -6,7 +6,7 @@ ARG S6_OVERLAY_VERSION=3.2.0.0
 # 更改主服务名称 只需在此配置变量名即可 其他服务无需理会
 ARG S6_OVERLAY_SERVIES=sshd
 # 主服务项目PATH
-ARG S6_SERVIES_PATH=${S6_SERVIES_PATH}
+ARG S6_SERVIES_PATH=/etc/s6-overlay/s6-rc.d/${S6_OVERLAY_SERVIES}
 # 主服务项目RUNTIMES_PATH_01
 ARG S6_SERVIES_RUNTIMES_PATH_01=/var/run/${S6_OVERLAY_SERVIES}
 # 主服务项目RUNTIMES_PATH_02
@@ -31,7 +31,7 @@ COPY /app/sshd_config /etc/ssh/sshd_config
 
 # 生成主服务${S6_OVERLAY_SERVIES}运行目录配置权限
 RUN  mkdir ${S6_SERVIES_RUNTIMES_PATH_01} && chmod 700 ${S6_SERVIES_RUNTIMES_PATH_01} && chown root:root ${S6_SERVIES_RUNTIMES_PATH_01}
-RUN  mkdir ${S6_SERVIES_RUNTIMES_PATH_02} && chmod 700 ${S6_SERVIES_RUNTIMES_PATH_02} && chown root:root ${S6_SERVIES_RUNTIMES_PATH_02}
+#RUN  mkdir ${S6_SERVIES_RUNTIMES_PATH_02} && chmod 700 ${S6_SERVIES_RUNTIMES_PATH_02} && chown root:root ${S6_SERVIES_RUNTIMES_PATH_02}
 
 # 设置初始root密码
 RUN echo 'root:root@#1314' | chpasswd
