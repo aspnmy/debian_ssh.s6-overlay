@@ -4,7 +4,7 @@ ARG S6_OVERLAY_VERSION=3.2.0.0
 # 更改主服务名称 只需在此配置变量名即可 其他服务无需理会
 ARG S6_OVERLAY_SERVIES=sshd
 
-#### --构建主服务v${S6_OVERLAY_SERVIES}语句-开始
+#### --构建主服务${S6_OVERLAY_SERVIES}语句-开始
 # 更新软件包列表
 RUN apt-get update && apt-get install -y xz-utils openssh-server
 
@@ -14,35 +14,35 @@ COPY ./app/sshd_config /etc/ssh/sshd_config
 # COPY authorized_keys /root/.ssh/authorized_keys
 # RUN chmod 600 /root/.ssh/authorized_keys
 
-# 生成主服务v${S6_OVERLAY_SERVIES}运行目录配置权限
-RUN  mkdir /var/run/v${S6_OVERLAY_SERVIES} && chmod 700 /var/run/v${S6_OVERLAY_SERVIES} && chown root:root /var/run/v${S6_OVERLAY_SERVIES}
+# 生成主服务${S6_OVERLAY_SERVIES}运行目录配置权限
+RUN  mkdir /var/run/${S6_OVERLAY_SERVIES} && chmod 700 /var/run/${S6_OVERLAY_SERVIES} && chown root:root /var/run/${S6_OVERLAY_SERVIES}
 
 # 设置初始root密码
 RUN echo 'root:root@#1314' | chpasswd
 
-#### --构建主服务v${S6_OVERLAY_SERVIES}语句-结束
+#### --构建主服务${S6_OVERLAY_SERVIES}语句-结束
 
-#### --构建超级进程服务v${S6_OVERLAY_SERVIES}语句-开始-不清楚不要改
+#### --构建超级进程服务${S6_OVERLAY_SERVIES}语句-开始-不清楚不要改
 # ----安装S6_OVERLAY-github下载最新版s6-overlay 不需要更改
 ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz /tmp
 ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-x86_64.tar.xz /tmp
 RUN tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz && tar -C / -Jxpf /tmp/s6-overlay-x86_64.tar.xz
 
 
-# 使用s6新版配置格式配置 创建v${S6_OVERLAY_SERVIES}服务脚本并配置权限
+# 使用s6新版配置格式配置 创建${S6_OVERLAY_SERVIES}服务脚本并配置权限
 
-# 新增v${S6_OVERLAY_SERVIES}工作路径 
-RUN mkdir -p /etc/s6-overlay/s6-rc.d/v${S6_OVERLAY_SERVIES}  && mkdir -p /etc/s6-overlay/s6-rc.d/v${S6_OVERLAY_SERVIES}/dependencies.d && touch /etc/s6-overlay/s6-rc.d/user/contents.d/v${S6_OVERLAY_SERVIES} && touch /etc/s6-overlay/s6-rc.d/v${S6_OVERLAY_SERVIES}/dependencies.d/base
+# 新增${S6_OVERLAY_SERVIES}工作路径 
+RUN mkdir -p /etc/s6-overlay/s6-rc.d/${S6_OVERLAY_SERVIES}  && mkdir -p /etc/s6-overlay/s6-rc.d/${S6_OVERLAY_SERVIES}/dependencies.d && touch /etc/s6-overlay/s6-rc.d/user/contents.d/${S6_OVERLAY_SERVIES} && touch /etc/s6-overlay/s6-rc.d/${S6_OVERLAY_SERVIES}/dependencies.d/base
 
-# 复制v${S6_OVERLAY_SERVIES}工作脚本到主路径
-COPY ./app/v${S6_OVERLAY_SERVIES}.type /etc/s6-overlay/s6-rc.d/v${S6_OVERLAY_SERVIES}/type
-COPY ./app/v${S6_OVERLAY_SERVIES}.run /etc/s6-overlay/s6-rc.d/v${S6_OVERLAY_SERVIES}/run
-COPY ./app/v${S6_OVERLAY_SERVIES}.finish /etc/services.d/v${S6_OVERLAY_SERVIES}/finish
+# 复制${S6_OVERLAY_SERVIES}工作脚本到主路径
+COPY ./app/${S6_OVERLAY_SERVIES}.type /etc/s6-overlay/s6-rc.d/${S6_OVERLAY_SERVIES}/type
+COPY ./app/${S6_OVERLAY_SERVIES}.run /etc/s6-overlay/s6-rc.d/${S6_OVERLAY_SERVIES}/run
+COPY ./app/${S6_OVERLAY_SERVIES}.finish /etc/services.d/${S6_OVERLAY_SERVIES}/finish
 
-# 配置主服务v${S6_OVERLAY_SERVIES}脚本权限
-RUN chmod +x /etc/s6-overlay/s6-rc.d/v${S6_OVERLAY_SERVIES}/type && chmod +x /etc/services.d/v${S6_OVERLAY_SERVIES}/run && chmod +x /etc/services.d/v${S6_OVERLAY_SERVIES}/finish
+# 配置主服务${S6_OVERLAY_SERVIES}脚本权限
+RUN chmod +x /etc/s6-overlay/s6-rc.d/${S6_OVERLAY_SERVIES}/type && chmod +x /etc/services.d/${S6_OVERLAY_SERVIES}/run && chmod +x /etc/services.d/${S6_OVERLAY_SERVIES}/finish
 
-#### --构建超级进程服务v${S6_OVERLAY_SERVIES}语句-结束
+#### --构建超级进程服务${S6_OVERLAY_SERVIES}语句-结束
 
 
 # 暴露622端口
