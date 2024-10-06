@@ -1,14 +1,34 @@
-FROM aspnmy/debian:s6-overlay-v12.7
-# 安装SSH服务
-# 配置更新源
-ADD sources.list /etc/apt/sources.list 
-ADD build_ite.sh /tmp 
+FROM aspnmy/debian:base
 
-RUN apt update && chmod +x /tmp/build_ite.sh && /tmp/build_ite.sh
-RUN apt-get clean && rm -rf /var/lib/apt/lists/* && rm -rf /tmp/*
-EXPOSE 22
-CMD ["/usr/sbin/sshd", "-D"]
+ARG S6_OVERLAY_VERSION=3.2.0.0
 
+# 更新软件包列表
+RUN apt-get update
+
+# 安装nginx, xz-utils 和 openssh-server
+RUN apt-get install -y nginx xz-utils openssh-server
+
+# github下载最新版s6-overlay
+ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz /tmp
+ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-x86_64.tar.xz /tmp
+
+# 解压s6-overlay
+RUN tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz
+RUN tar -C / -Jxpf /tmp/s6-overlay-x86_64.tar.xz
+
+# 复制自定义的sshd_config文件
+COPY sshd_config /etc/ssh/sshd_config
+
+# 复制SSH公钥（如果使用密钥登录）
+# COPY authorized_keys /root/.ssh/authorized_keys
+# RUN chmod 600 /root/.ssh/authorized_keys
+
+# 创建服务目录
+RUN mkdir -p /etc/s6/services/sshd
+RUN echo "#!/bin/execlineb -P\n-sshd -o UsePAM=no -o UseDNS=no" > /etc/s6/services/sshd/run
+RUN chmod +x /etc/s6/services/sshd/run
+
+# 设置ENTRYPOINT
 ENTRYPOINT ["/init"]
 
 
