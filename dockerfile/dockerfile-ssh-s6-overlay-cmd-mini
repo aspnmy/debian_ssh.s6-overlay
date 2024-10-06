@@ -1,6 +1,6 @@
 # 一致性构建镜像 buildah bud --no-cache -f dockerfiles -t 容器名
 
-FROM aspnmy/debian:base-v12.7
+FROM aspnmy/debian:base
 
 ARG S6_OVERLAY_VERSION=3.2.0.0
 # 更改主服务名称 只需在此配置变量名即可 其他服务无需理会
@@ -43,7 +43,7 @@ EXPOSE 622
 
 
 # 清理缓存减小容器体积
-RUN apt-get remove -y xz-utils dos2unix && rm -rf /var/lib/apt/lists/* && rm -rf /tmp/*
+RUN apt-get autoremove -y xz-utils dos2unix && apt-get autoclean && apt-get clean && rm -rf /var/lib/apt/lists/* && rm -rf /tmp/*
 
 # 设置s6-overla:v${S6_OVERLAY_VERSION}全局的ENTRYPOINT
 ENTRYPOINT ["/init"]
