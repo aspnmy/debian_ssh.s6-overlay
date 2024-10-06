@@ -23,6 +23,12 @@ COPY sshd_config /etc/ssh/sshd_config
 # COPY authorized_keys /root/.ssh/authorized_keys
 # RUN chmod 600 /root/.ssh/authorized_keys
 
+# 创建sshd服务脚本
+COPY sshd.run /etc/services.d/sshd/run
+COPY sshd.finish /etc/services.d/sshd/finish
+
+
+
 # 生成运行目录配置权限
 RUN  mkdir /var/run/sshd && chmod 700 /var/run/sshd && chown root:root /var/run/sshd
 # 设置初始root密码
@@ -31,7 +37,7 @@ RUN echo 'root:root@#1314' | chpasswd
 # Quick Run
 # 暴露22端口
 EXPOSE 22
-CMD ['/usr/sbin/sshd','-D']
+
 
 # 清理缓存减小容器体积
 RUN rm -rf /var/lib/apt/lists/* && rm -rf /tmp/*
