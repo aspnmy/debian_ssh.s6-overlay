@@ -12,12 +12,16 @@ ARG S6_SERVIES_RUNTIMES_PATH_01=/var/run/${S6_OVERLAY_SERVIES}
 # 主服务项目RUNTIMES_PATH_02
 ARG S6_SERVIES_RUNTIMES_PATH_02=/root/run/${S6_OVERLAY_SERVIES}
 
+
 # 下面是固定的业务常量不需要修改
 # S6_OVERLAY_USER_PATH_01
 ARG S6_OVERLAY_USER_PATH_01=/etc/s6-overlay/s6-rc.d/user/contents.d
 
 # S6_OVERLAY_USER_PATH_02
 ARG S6_OVERLAY_USER_PATH_02=/etc/s6-overlay/s6-rc.d/user2/contents.d
+
+# S6_OVERLAY_UPDATE_URL
+ARG S6_OVERLAY_UPDATE_URL=https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}
 
 #### --构建主服务${S6_OVERLAY_SERVIES}语句-开始
 # 更新软件包列表
@@ -40,8 +44,8 @@ RUN echo 'root:root@#1314' | chpasswd
 
 #### --构建超级进程服务${S6_OVERLAY_SERVIES}语句-开始-不清楚不要改
 # ----安装S6_OVERLAY-github下载最新版s6-overlay 不需要更改
-ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz /tmp
-ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-x86_64.tar.xz /tmp
+ADD ${S6_OVERLAY_UPDATE_URL}/s6-overlay-noarch.tar.xz /tmp
+ADD ${S6_OVERLAY_UPDATE_URL}/s6-overlay-x86_64.tar.xz /tmp
 RUN tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz && tar -C / -Jxpf /tmp/s6-overlay-x86_64.tar.xz
 
 
