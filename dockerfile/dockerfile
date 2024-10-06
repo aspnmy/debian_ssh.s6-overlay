@@ -6,7 +6,7 @@ ARG S6_OVERLAY_VERSION=3.2.0.0
 RUN apt-get update
 
 # 安装nginx, xz-utils 和 openssh-server
-RUN apt-get install -y nginx xz-utils openssh-server
+RUN apt-get install -y nginx xz-utils openssh-server vim
 
 # github下载最新版s6-overlay
 ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz /tmp
@@ -23,18 +23,16 @@ COPY sshd_config /etc/ssh/sshd_config
 # COPY authorized_keys /root/.ssh/authorized_keys
 # RUN chmod 600 /root/.ssh/authorized_keys
 
+# 生成运行目录配置权限
+RUN nkdir -p /run/sshd && chmod 700 /run/sshd && chown root:root /run/sshd
 # 设置初始root密码
 RUN echo 'root:root@#1314' | chpasswd
 
-# 创建服务目录
-RUN mkdir -p /etc/s6/services/sshd
-RUN echo "#!/bin/execlineb -P\n /usr/sbin/sshd -o UsePAM=no -o UseDNS=no" > /etc/s6/services/sshd/run
-RUN chmod +x /etc/s6/services/sshd/run
+# Quick Run
+CMD ['/usr/sbin/sshd','-D']
 
 # 清理缓存减小容器体积
 RUN rm -rf /var/lib/apt/lists/* && rm -rf /tmp/*
 
 # 设置ENTRYPOINT
 ENTRYPOINT ["/init"]
-
-
