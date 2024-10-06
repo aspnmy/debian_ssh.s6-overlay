@@ -35,8 +35,8 @@ RUN  mkdir /var/run/sshd && chmod 700 /var/run/sshd && chown root:root /var/run/
 RUN echo 'root:root@#1314' | chpasswd
 
 # Quick Run
-# 暴露22端口
-EXPOSE 22
+# 暴露622端口
+EXPOSE 622
 
 
 # 清理缓存减小容器体积
