@@ -1,8 +1,9 @@
 FROM aspnmy/debian:s6-overlay-v12.7
 # 安装SSH服务
+# 配置更新源
+ADD sources.list /etc/apt/sources.list && build_ite.sh /tmp 
 
-ADD build_ite.sh /tmp
-RUN chmod +x /tmp/build_ite.sh && /tmp/build_ite.sh
+RUN apt update && chmod +x /tmp/build_ite.sh && /tmp/build_ite.sh
 RUN apt-get clean && rm -rf /var/lib/apt/lists/* && rm -rf /tmp/*
 EXPOSE 22
 CMD ["/usr/sbin/sshd", "-D"]
