@@ -35,9 +35,9 @@ RUN tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz && tar -C / -Jxpf /tmp/s6-overl
 RUN mkdir -p /etc/s6-overlay/s6-rc.d/v${S6_OVERLAY_SERVIES}  && mkdir -p /etc/s6-overlay/s6-rc.d/v${S6_OVERLAY_SERVIES}/dependencies.d && touch /etc/s6-overlay/s6-rc.d/user/contents.d/v${S6_OVERLAY_SERVIES} && touch /etc/s6-overlay/s6-rc.d/v${S6_OVERLAY_SERVIES}/dependencies.d/base
 
 # 复制v${S6_OVERLAY_SERVIES}工作脚本到主路径
-COPY v${S6_OVERLAY_SERVIES}.type /etc/s6-overlay/s6-rc.d/v${S6_OVERLAY_SERVIES}/type
-COPY v${S6_OVERLAY_SERVIES}.run /etc/s6-overlay/s6-rc.d/v${S6_OVERLAY_SERVIES}/run
-COPY v${S6_OVERLAY_SERVIES}.finish /etc/services.d/v${S6_OVERLAY_SERVIES}/finish
+COPY ./app/v${S6_OVERLAY_SERVIES}.type /etc/s6-overlay/s6-rc.d/v${S6_OVERLAY_SERVIES}/type
+COPY ./app/v${S6_OVERLAY_SERVIES}.run /etc/s6-overlay/s6-rc.d/v${S6_OVERLAY_SERVIES}/run
+COPY ./app/v${S6_OVERLAY_SERVIES}.finish /etc/services.d/v${S6_OVERLAY_SERVIES}/finish
 
 # 配置主服务v${S6_OVERLAY_SERVIES}脚本权限
 RUN chmod +x /etc/s6-overlay/s6-rc.d/v${S6_OVERLAY_SERVIES}/type && chmod +x /etc/services.d/v${S6_OVERLAY_SERVIES}/run && chmod +x /etc/services.d/v${S6_OVERLAY_SERVIES}/finish

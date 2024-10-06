@@ -6,7 +6,7 @@
 
 # 构建样本
 
-[批量构建模板](./dockerfile/sample/dockerfile-ssh-s6-overlay.sample)
+[批量构建模板](./sample/dockerfile-ssh-s6-overlay.sample)
 
 # debian_ssh-s6-overlay
 
