@@ -19,7 +19,7 @@ RUN tar -C / -Jxpf /tmp/s6-overlay-x86_64.tar.xz
 # 复制自定义的sshd_config文件
 COPY sshd_config /etc/ssh/sshd_config
 
-# 复制SSH公钥（如果使用密钥登录）
+# 复制SSH公钥(如果使用密钥登录)
 # COPY authorized_keys /root/.ssh/authorized_keys
 # RUN chmod 600 /root/.ssh/authorized_keys
 
