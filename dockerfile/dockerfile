@@ -24,11 +24,13 @@ COPY sshd_config /etc/ssh/sshd_config
 # RUN chmod 600 /root/.ssh/authorized_keys
 
 # 生成运行目录配置权限
-RUN nkdir -p /run/sshd && chmod 700 /run/sshd && chown root:root /run/sshd
+RUN  mkdir /var/run/sshd && chmod 700 /var/run/sshd && chown root:root /var/run/sshd
 # 设置初始root密码
 RUN echo 'root:root@#1314' | chpasswd
 
 # Quick Run
+# 暴露22端口
+EXPOSE 22
 CMD ['/usr/sbin/sshd','-D']
 
 # 清理缓存减小容器体积
