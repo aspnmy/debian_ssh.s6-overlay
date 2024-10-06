@@ -25,7 +25,7 @@ ARG S6_OVERLAY_UPDATE_URL=https://github.com/just-containers/s6-overlay/releases
 
 #### --构建主服务${S6_OVERLAY_SERVIES}语句-开始
 # 更新软件包列表
-RUN apt-get update && apt-get install -y xz-utils openssh-server
+RUN apt-get update && apt-get install -y xz-utils openssh-server dos2unix
 
 # 复制自定义的sshd_config文件
 COPY /app/sshd_config /etc/ssh/sshd_config
@@ -59,8 +59,15 @@ COPY /app/${S6_OVERLAY_SERVIES}.type ${S6_SERVIES_PATH}/type
 COPY /app/${S6_OVERLAY_SERVIES}.run ${S6_SERVIES_PATH}/run
 COPY /app/${S6_OVERLAY_SERVIES}.finish ${S6_SERVIES_PATH}/finish
 
+# 配置脚本正确字符串
+# debug S6-Supervise (child): S6 Fatal: Unable to spawn ./run: No such file or directory
+RUN for file in ${S6_SERVIES_PATH}/*/*; do \
+dos2unix $file; \
+chmod a+xwr $file; \
+done
+
 # 配置主服务${S6_OVERLAY_SERVIES}脚本权限
-RUN chmod +x ${S6_SERVIES_PATH}/type && chmod +x ${S6_SERVIES_PATH}/run && chmod +x ${S6_SERVIES_PATH}/finish
+# RUN chmod +x ${S6_SERVIES_PATH}/type && chmod +x ${S6_SERVIES_PATH}/run && chmod +x ${S6_SERVIES_PATH}/finish
 #### --构建超级进程服务${S6_OVERLAY_SERVIES}语句-结束
 
 
