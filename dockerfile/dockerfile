@@ -23,10 +23,16 @@ COPY sshd_config /etc/ssh/sshd_config
 # COPY authorized_keys /root/.ssh/authorized_keys
 # RUN chmod 600 /root/.ssh/authorized_keys
 
+# 设置初始root密码
+RUN echo 'root:root@#1314' | chpasswd
+
 # 创建服务目录
 RUN mkdir -p /etc/s6/services/sshd
 RUN echo "#!/bin/execlineb -P\n-sshd -o UsePAM=no -o UseDNS=no" > /etc/s6/services/sshd/run
 RUN chmod +x /etc/s6/services/sshd/run
+
+# 清理缓存减小容器体积
+RUN rm -rf /var/lib/apt/lists/* && rm -rf /tmp/*
 
 # 设置ENTRYPOINT
 ENTRYPOINT ["/init"]
