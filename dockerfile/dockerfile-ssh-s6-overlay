@@ -9,7 +9,7 @@ ARG S6_OVERLAY_SERVIES=sshd
 RUN apt-get update && apt-get install -y xz-utils openssh-server
 
 # 复制自定义的sshd_config文件
-COPY sshd_config /etc/ssh/sshd_config
+COPY ./app/sshd_config /etc/ssh/sshd_config
 # 复制SSH公钥(可选-如果使用密钥登录)
 # COPY authorized_keys /root/.ssh/authorized_keys
 # RUN chmod 600 /root/.ssh/authorized_keys

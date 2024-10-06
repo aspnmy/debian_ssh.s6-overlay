@@ -6,7 +6,8 @@
 
 # 构建样本
 
-[批量构建模板](./dockerfile/sample/dockerfile-ssh-s6-overlay.sample)
+- [批量构建模板](./dockerfile/sample/dockerfile-ssh-s6-overlay.sample)
+- 使用模板的时候要主要默认的构建文件资源放在app/下,请改成自己的路径
 
 # About debian_ssh.s6-overlay
 
