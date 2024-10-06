@@ -1,12 +1,13 @@
 FROM aspnmy/debian:base
 
 ARG S6_OVERLAY_VERSION=3.2.0.0
+ARG S6_OVERLAY_SERVIES=sshd
 
 # 更新软件包列表
 RUN apt-get update
 
-# 安装nginx, xz-utils 和 openssh-server
-RUN apt-get install -y nginx xz-utils openssh-server vim
+# 安装 xz-utils 和 openssh-server
+RUN apt-get install -y xz-utils openssh-server
 
 # github下载最新版s6-overlay
 ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz /tmp
@@ -23,12 +24,17 @@ COPY sshd_config /etc/ssh/sshd_config
 # COPY authorized_keys /root/.ssh/authorized_keys
 # RUN chmod 600 /root/.ssh/authorized_keys
 
-# 创建sshd服务脚本并配置权限
-COPY sshd.run /etc/services.d/sshd/run
-COPY sshd.finish /etc/services.d/sshd/finish
-RUN chmod +x /etc/services.d/sshd/run && chmod +x /etc/services.d/sshd/finish
+# 使用s6新版配置格式 创建sshd服务脚本并配置权限
+
+RUN mkdir -p /etc/s6-overlay/s6-rc.d/v${S6_OVERLAY_SERVIES} && mkdir -p /etc/s6-overlay/s6-rc.d/user/contents.d/v${S6_OVERLAY_SERVIES} && mkdir -p /etc/s6-overlay/s6-rc.d/v${S6_OVERLAY_SERVIES}/dependencies.d/base
+
+COPY sshd.type /etc/s6-overlay/s6-rc.d/v${S6_OVERLAY_SERVIES}/type
+COPY sshd.run /etc/s6-overlay/s6-rc.d/v${S6_OVERLAY_SERVIES}/run
+COPY sshd.finish /etc/services.d/v${S6_OVERLAY_SERVIES}/finish
+
+RUN chmod +x /etc/s6-overlay/s6-rc.d/v${S6_OVERLAY_SERVIES}/type && chmod +x /etc/services.d/v${S6_OVERLAY_SERVIES}/run && chmod +x /etc/services.d/v${S6_OVERLAY_SERVIES}/finish
 # 生成运行目录配置权限
-RUN  mkdir /var/run/sshd && chmod 700 /var/run/sshd && chown root:root /var/run/sshd
+RUN  mkdir /var/run/v${S6_OVERLAY_SERVIES} && chmod 700 /var/run/v${S6_OVERLAY_SERVIES} && chown root:root /var/run/v${S6_OVERLAY_SERVIES}
 # 设置初始root密码
 RUN echo 'root:root@#1314' | chpasswd
 
