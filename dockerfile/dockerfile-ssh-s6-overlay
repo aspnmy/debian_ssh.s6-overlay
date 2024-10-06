@@ -9,7 +9,7 @@ ARG S6_OVERLAY_SERVIES=sshd
 RUN apt-get update && apt-get install -y xz-utils openssh-server
 
 # 复制自定义的sshd_config文件
-COPY ./app/sshd_config /etc/ssh/sshd_config
+COPY /app/sshd_config /etc/ssh/sshd_config
 # 复制SSH公钥(可选-如果使用密钥登录)
 # COPY authorized_keys /root/.ssh/authorized_keys
 # RUN chmod 600 /root/.ssh/authorized_keys
@@ -35,9 +35,9 @@ RUN tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz && tar -C / -Jxpf /tmp/s6-overl
 RUN mkdir -p /etc/s6-overlay/s6-rc.d/${S6_OVERLAY_SERVIES}  && mkdir -p /etc/s6-overlay/s6-rc.d/${S6_OVERLAY_SERVIES}/dependencies.d && touch /etc/s6-overlay/s6-rc.d/user/contents.d/${S6_OVERLAY_SERVIES} && touch /etc/s6-overlay/s6-rc.d/${S6_OVERLAY_SERVIES}/dependencies.d/base
 
 # 复制${S6_OVERLAY_SERVIES}工作脚本到主路径
-COPY ./app/${S6_OVERLAY_SERVIES}.type /etc/s6-overlay/s6-rc.d/${S6_OVERLAY_SERVIES}/type
-COPY ./app/${S6_OVERLAY_SERVIES}.run /etc/s6-overlay/s6-rc.d/${S6_OVERLAY_SERVIES}/run
-COPY ./app/${S6_OVERLAY_SERVIES}.finish /etc/services.d/${S6_OVERLAY_SERVIES}/finish
+COPY /app/${S6_OVERLAY_SERVIES}.type /etc/s6-overlay/s6-rc.d/${S6_OVERLAY_SERVIES}/type
+COPY /app/${S6_OVERLAY_SERVIES}.run /etc/s6-overlay/s6-rc.d/${S6_OVERLAY_SERVIES}/run
+COPY /app/${S6_OVERLAY_SERVIES}.finish /etc/services.d/${S6_OVERLAY_SERVIES}/finish
 
 # 配置主服务${S6_OVERLAY_SERVIES}脚本权限
 RUN chmod +x /etc/s6-overlay/s6-rc.d/${S6_OVERLAY_SERVIES}/type && chmod +x /etc/services.d/${S6_OVERLAY_SERVIES}/run && chmod +x /etc/services.d/${S6_OVERLAY_SERVIES}/finish
