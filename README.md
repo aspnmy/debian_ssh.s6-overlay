@@ -8,11 +8,27 @@
 
 [批量构建模板](./dockerfile/sample/dockerfile-ssh-s6-overlay.sample)
 
-# debian_ssh-s6-overlay
+# About debian_ssh.s6-overlay
 
-集成了s6-overlay进程管理器的debian_ssh版本(容器内直接打开ssh端口22,可直接访问容器内业务)
+- 集成了s6-overlay进程管理器的debian_ssh版本(容器内直接打开ssh端口22,可直接访问容器内业务)
 
-默认root密码rootadmin, 使用时请自行修改
+- 默认root密码root@#1314, 使用时请自行修改
+- 默认的ssh端口是622,使用时请自行放通防火墙,用云服务器的还需要放通安全组
+- 默认网络模式为桥接,宿主机需要映射端口,如果使用host模式,可以直接访问622即可
+
+# Docker-compose运行
+```docker
+name: debian-ssh:s6-overlay-v12.7
+services:
+    debian-s6-overlay-622:
+        stdin_open: true
+        tty: true
+        container_name: debian-s6-overlay-622
+        ports:
+            - 622:622
+        image: aspnmy/debian-ssh:s6-overlay-v12.7
+
+```
 
 # 什么是s6-overlay
 s6-overlay是一个基于s6工具集的进程管理器,它被设计用于容器化环境,并提供了进程监督、管理和日志记录功能。它是一个轻量级的init系统替代品,适用于Docker容器中运行多个进程的场景。
