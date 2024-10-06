@@ -1,8 +1,23 @@
+# 一致性构建镜像 buildah bud --no-cache -f dockerfiles -t 容器名
+
 FROM aspnmy/debian:base
 
 ARG S6_OVERLAY_VERSION=3.2.0.0
 # 更改主服务名称 只需在此配置变量名即可 其他服务无需理会
 ARG S6_OVERLAY_SERVIES=sshd
+# 主服务项目PATH
+ARG S6_SERVIES_PATH=${S6_SERVIES_PATH}
+# 主服务项目RUNTIMES_PATH_01
+ARG S6_SERVIES_RUNTIMES_PATH_01=/var/run/${S6_OVERLAY_SERVIES}
+# 主服务项目RUNTIMES_PATH_02
+ARG S6_SERVIES_RUNTIMES_PATH_02=/root/run/${S6_OVERLAY_SERVIES}
+
+# 下面是固定的业务常量不需要修改
+# S6_OVERLAY_USER_PATH_01
+ARG S6_OVERLAY_USER_PATH_01=/etc/s6-overlay/s6-rc.d/user/contents.d
+
+# S6_OVERLAY_USER_PATH_02
+ARG S6_OVERLAY_USER_PATH_02=/etc/s6-overlay/s6-rc.d/user2/contents.d
 
 #### --构建主服务${S6_OVERLAY_SERVIES}语句-开始
 # 更新软件包列表
@@ -15,7 +30,8 @@ COPY /app/sshd_config /etc/ssh/sshd_config
 # RUN chmod 600 /root/.ssh/authorized_keys
 
 # 生成主服务${S6_OVERLAY_SERVIES}运行目录配置权限
-RUN  mkdir /var/run/${S6_OVERLAY_SERVIES} && chmod 700 /var/run/${S6_OVERLAY_SERVIES} && chown root:root /var/run/${S6_OVERLAY_SERVIES}
+RUN  mkdir ${S6_SERVIES_RUNTIMES_PATH_01} && chmod 700 ${S6_SERVIES_RUNTIMES_PATH_01} && chown root:root ${S6_SERVIES_RUNTIMES_PATH_01}
+RUN  mkdir ${S6_SERVIES_RUNTIMES_PATH_02} && chmod 700 ${S6_SERVIES_RUNTIMES_PATH_02} && chown root:root ${S6_SERVIES_RUNTIMES_PATH_02}
 
 # 设置初始root密码
 RUN echo 'root:root@#1314' | chpasswd
@@ -31,17 +47,16 @@ RUN tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz && tar -C / -Jxpf /tmp/s6-overl
 
 # 使用s6新版配置格式配置 创建${S6_OVERLAY_SERVIES}服务脚本并配置权限
 
-# 新增${S6_OVERLAY_SERVIES}工作路径 
-RUN mkdir -p /etc/s6-overlay/s6-rc.d/${S6_OVERLAY_SERVIES}  && mkdir -p /etc/s6-overlay/s6-rc.d/${S6_OVERLAY_SERVIES}/dependencies.d && touch /etc/s6-overlay/s6-rc.d/user/contents.d/${S6_OVERLAY_SERVIES} && touch /etc/s6-overlay/s6-rc.d/${S6_OVERLAY_SERVIES}/dependencies.d/base
+# 新增${S6_OVERLAY_SERVIES}工作路径
+RUN mkdir -p ${S6_SERVIES_PATH}  && mkdir -p ${S6_SERVIES_PATH}/dependencies.d && touch ${S6_OVERLAY_USER_PATH_01}/${S6_OVERLAY_SERVIES} && touch ${S6_SERVIES_PATH}/dependencies.d/base
 
 # 复制${S6_OVERLAY_SERVIES}工作脚本到主路径
-COPY /app/${S6_OVERLAY_SERVIES}.type /etc/s6-overlay/s6-rc.d/${S6_OVERLAY_SERVIES}/type
-COPY /app/${S6_OVERLAY_SERVIES}.run /etc/s6-overlay/s6-rc.d/${S6_OVERLAY_SERVIES}/run
-COPY /app/${S6_OVERLAY_SERVIES}.finish /etc/services.d/${S6_OVERLAY_SERVIES}/finish
+COPY /app/${S6_OVERLAY_SERVIES}.type ${S6_SERVIES_PATH}/type
+COPY /app/${S6_OVERLAY_SERVIES}.run ${S6_SERVIES_PATH}/run
+COPY /app/${S6_OVERLAY_SERVIES}.finish ${S6_SERVIES_PATH}/finish
 
 # 配置主服务${S6_OVERLAY_SERVIES}脚本权限
-RUN chmod +x /etc/s6-overlay/s6-rc.d/${S6_OVERLAY_SERVIES}/type && chmod +x /etc/services.d/${S6_OVERLAY_SERVIES}/run && chmod +x /etc/services.d/${S6_OVERLAY_SERVIES}/finish
-
+RUN chmod +x ${S6_SERVIES_PATH}/type && chmod +x ${S6_SERVIES_PATH}/run && chmod +x ${S6_SERVIES_PATH}/finish
 #### --构建超级进程服务${S6_OVERLAY_SERVIES}语句-结束
 
 
