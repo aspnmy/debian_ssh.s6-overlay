@@ -1,0 +1,19 @@
+# 一致性构建镜像 buildah bud --no-cache -f dockerfile-ssh-s6-overlay-cmd-update -t aspnmy/debian-ssh:s6-overlay-v12.7-rc1
+
+FROM aspnmy/debian-ssh:s6-overlay-v12.7
+
+
+# 更新软件包列表
+RUN apt-get update && apt-get install -y wget curl sudo && mkdir /sh
+ADD start.sh /sh
+RUN chmod +x /sh/start.sh && rm -rf /var/lib/apt/lists/* && rm -rf /tmp/*
+WORKDIR /sh
+# 暴露622端口
+EXPOSE 622
+
+
+
+# 设置s6-overla:v${S6_OVERLAY_VERSION}全局的ENTRYPOINT
+ENTRYPOINT ["/init"]
+
+CMD [ "./start.sh" ]
