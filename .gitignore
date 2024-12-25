@@ -34,4 +34,4 @@
 
 .env/
 
-authorized_keys
+dockerfile/authorized_keys
