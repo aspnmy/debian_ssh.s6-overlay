@@ -1,5 +1,5 @@
 # Telegrarcm 交流
-[Telegrarcm Club](https://t.me/AIisDog)
+[Telegrarcm Club](https://t.me/+2SRIxuCE7v9lZjJl)
 
 # 科学上网
 [一点点鸡肠](https://sbairport.com/#/register?code=sTHcpv7y)
