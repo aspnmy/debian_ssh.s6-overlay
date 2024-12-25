@@ -33,3 +33,5 @@
 *.app
 
 .env/
+
+authorized_keys
