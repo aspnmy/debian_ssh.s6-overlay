@@ -1,2 +1,2 @@
-#!/bin/execlineb -P
+#!/bin/bash
 /usr/sbin/sshd -D
