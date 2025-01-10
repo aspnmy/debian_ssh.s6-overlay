@@ -1,13 +1,16 @@
 # 一致性构建镜像 buildah bud --no-cache -f dockerfiles -t 容器名
 
-FROM aspnmy/debian-ssh:s6-overlay-v12.7-devworker-base
+FROM aspnmy/debian-ssh:s6-overlay-v3.2.0.2-v12.7-base  AS dev-base
+
+# 通过重建基础镜像 来降低镜像体积
 
 
-WORKDIR /sh
-RUN mkdir -p /sh/cfworktools && apt update && apt install -y jq
-COPY /app/cfworktools/install_cftest.sh /sh/cfworktools/install_cftest.sh
 
-RUN  chmod +x /sh/cfworktools/install_cftest.sh  && rm -rf /var/lib/apt/lists/* && rm -rf /tmp/*
+RUN mkdir -p /sh && mkdir -p /sh/cfworktools && apt update && apt install -y jq wget curl git 
+#COPY /app/cfworktools/* /sh/cfworktools/
+#COPY /app/start.sh  /sh/start.sh
+#RUN  chmod +x /sh/start.sh  && 
+RUN sudo apt automove -y && suod rm -rf /var/lib/apt/lists/* && sudo rm -rf /tmp/*
 
 
 # 暴露622端口
@@ -18,4 +21,4 @@ EXPOSE 622
 # 设置s6-overla:v${S6_OVERLAY_VERSION}全局的ENTRYPOINT
 ENTRYPOINT ["/init"]
 
-CMD [ "./start.sh" ]
+#CMD [ "./start.sh" ]
