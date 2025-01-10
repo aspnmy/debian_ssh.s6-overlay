@@ -2,6 +2,7 @@
 FROM aspnmy/debian-ssh:s6-overlay-v12.7-devwork
 
 # #替换为阿里源
+RUN mv /etc/apt/sources.list /etc/apt/sources.list.backup
 COPY /app/sources.list /etc/apt/sources.list
 # 合并语句减小镜像体积
 RUN   rm -rf /var/lib/apt/lists/* && rm -rf /tmp/*
