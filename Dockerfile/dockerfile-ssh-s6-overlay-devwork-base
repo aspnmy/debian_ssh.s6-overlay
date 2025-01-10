@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y  dos2unix vim git curl wget
 
 # # 复制root-sshkey管理工具
 # ADD /app/roottools/* /etc/ssh/
- COPY start.sh /sh/start.sh
+COPY start.sh /sh/start.sh
 # 合并语句减小镜像体积
 RUN  chmod +x /sh/start.sh && rm -rf /var/lib/apt/lists/* && rm -rf /tmp/*
 
