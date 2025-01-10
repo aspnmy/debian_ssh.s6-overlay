@@ -174,7 +174,7 @@ get_latest_download_url() {
     local response=$(curl -s $latest_release_url)
     
     # 输出响应以进行调试
-     echo "GitHub API 响应: $response"
+    # echo "GitHub API 响应: $response"
     
     local download_url=$(echo "$response" | jq -r '.assets[] | select(.name == "CloudflareST_linux_amd64.tar.gz") | .browser_download_url')
     
