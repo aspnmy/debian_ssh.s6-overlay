@@ -10,7 +10,7 @@ AUUSER="aspnmy"
 imgNAME="debian-ssh"
 imgNAMEBase="debian"
 ver="s6-overlay-v3.2.0.2-v12.7-devbase"
-docker build --no-cache -f ./dockerfile-ssh-s6-overlay \
+docker build --no-cache -f ./dockerfile-ssh-s6-overlay-devwork-base \
         -t $URI/$AUUSER/$imgNAME:$ver .
 docker tag $URI/$AUUSER/$imgNAME:$ver $URI/$AUUSER/$imgNAMEBase:$ver
 docker push $URI/$AUUSER/$imgNAME:$ver
