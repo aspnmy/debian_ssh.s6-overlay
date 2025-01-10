@@ -4,7 +4,7 @@ FROM aspnmy/debian-ssh:s6-overlay-v12.7-devworker-bash
 
 
 WORKDIR /sh
-RUN mkdrir -p /sh/cfworktools 
+RUN mkdir -p /sh/cfworktools 
 COPY /app/cfworktools/install_cftest.sh /sh/cfworktools/install_cftest.sh
 
 RUN  chmod +x /sh/cfworktools/install_cftest.sh && bash /sh/cfworktools/install_cftest.sh && rm -rf /var/lib/apt/lists/* && rm -rf /tmp/*
