@@ -25,7 +25,7 @@ ARG S6_OVERLAY_UPDATE_URL=https://github.com/just-containers/s6-overlay/releases
 
 #### --构建主服务${S6_OVERLAY_SERVIES}语句-开始
 # 更新软件包列表
-RUN apt-get update && apt-get install -y openssh-server xz-utils  dos2unix
+RUN apt-get update && apt-get install -y sudo openssh-server xz-utils  dos2unix
 
 
 
@@ -71,7 +71,7 @@ EXPOSE 622
 
 
 # 清理缓存减小容器体积
-RUN apt remove -y xz-utils  dos2unix && apt automove && rm -rf /var/lib/apt/lists/* && rm -rf /tmp/*
+RUN sudo apt remove -y xz-utils dos2unix && sudo apt autoremove -y && sudo rm -rf /var/lib/apt/lists/* && sudo rm -rf /tmp/*
 
 # 设置s6-overla:v${S6_OVERLAY_VERSION}全局的ENTRYPOINT
 ENTRYPOINT ["/init"]
