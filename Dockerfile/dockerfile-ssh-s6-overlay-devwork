@@ -1,15 +1,12 @@
 # 一致性构建镜像 buildah bud --no-cache -f dockerfiles -t 容器名
 
-FROM aspnmy/debian-ssh:s6-overlay-v12.7
+FROM aspnmy/debian-ssh:s6-overlay-v12.7-devworker-bash
 
 
-#### --构建主服务${S6_OVERLAY_SERVIES}语句-开始
-# 更新软件包列表
-RUN apt-get update && apt-get install -y  dos2unix vim git curl wget
 
 # # 复制root-sshkey管理工具
-# ADD /app/roottools/* /etc/ssh/
-# COPY start.sh /sh/start.sh
+ADD /app/roottools/* /etc/ssh/
+COPY start.sh /sh/start.sh
 # 合并语句减小镜像体积
 RUN  chmod +x /sh/start.sh && rm -rf /var/lib/apt/lists/* && rm -rf /tmp/*
 
@@ -17,9 +14,6 @@ WORKDIR /sh
 # 暴露622端口
 EXPOSE 622
 
-
-
-# 设置s6-overla:v${S6_OVERLAY_VERSION}全局的ENTRYPOINT
 ENTRYPOINT ["/init"]
 
 CMD [ "./start.sh" ]
