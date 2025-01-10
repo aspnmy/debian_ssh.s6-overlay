@@ -7,7 +7,7 @@ WORKDIR /sh
 RUN mkdir -p /sh/cfworktools && apt update && apt install -y jq
 COPY /app/cfworktools/install_cftest.sh /sh/cfworktools/install_cftest.sh
 
-RUN  chmod +x /sh/cfworktools/install_cftest.sh && bash /sh/cfworktools/install_cftest.sh && rm -rf /var/lib/apt/lists/* && rm -rf /tmp/*
+RUN  chmod +x /sh/cfworktools/install_cftest.sh  && rm -rf /var/lib/apt/lists/* && rm -rf /tmp/*
 
 
 # 暴露622端口
