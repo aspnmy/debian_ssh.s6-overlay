@@ -1,3 +1,4 @@
+#! bin/bash
 download_cfworktools() {
     # 下载CFTest工具
     local wURL
@@ -5,8 +6,10 @@ download_cfworktools() {
     echo "Downloading from $wURL"
 	if [ -z "$wURL" ]; then
 		echo "未能获取下载地址"
+		
 		exit 1
 	fi
+
         # 尝试下载文件，最多重试3次
     local max_retries=3
     local count=0
@@ -48,6 +51,56 @@ download_cfworktools() {
         echo $version > /sh/cftest/version
     fi
 }
+
+download_secend_cfworktools() {
+	# 下载CFTest工具
+	local ver
+	ver=$(get_latest_version)
+	local wgetURL="https://github.com/XIU2/CloudflareSpeedTest/releases/download/${ver}/CloudflareST_linux_amd64.tar.gz"
+
+		# 尝试下载文件，最多重试3次
+	local max_retries=3
+	local count=0
+	local success=0
+	while [ $count -lt $max_retries ]; do
+		curl -L -o /tmp/CloudflareSpeedTest-linux-amd64.tar.gz $wgetURL
+		if [ $? -eq 0 ]; then
+			success=1
+			break
+		fi
+		count=$((count + 1))
+		echo "下载失败，重试中... ($count/$max_retries)"
+		sleep 2
+	done
+
+	if [ $success -ne 1 ]; then
+		echo "下载文件失败"
+		exit 1
+	fi
+	mkdir -p /sh/cftest2
+	tar -xzf /tmp/CloudflareSpeedTest-linux-amd64.tar.gz -C /sh/cftest2
+	if [ $? -ne 0 ]; then
+		echo "解压文件失败"
+		if [ ! -f /sh/cftest2/version ]; then
+			touch /sh/cftest2/version
+			echo "1.0.0" > /sh/cftest2/version
+		
+		fi        
+		exit 1
+	fi
+	rm -f /tmp/CloudflareSpeedTest-linux-amd64.tar.gz
+	chmod +x /sh/cftest2/CloudflareST
+	chmod +x /sh/cftest2/cfst_hosts.sh
+	local version=$(get_latest_version)
+	if [ ! -f /sh/cftest2/version ]; then
+		touch /sh/cftest2/version
+		echo "1.0.0" > /sh/cftest2/version
+	else
+		echo $version > /sh/cftest2/version
+	fi
+}
+
+
 
 install_cftest() {
     download_cfworktools
@@ -131,7 +184,7 @@ get_latest_download_url() {
 		    if [ ! -f /sh/cftest/version ]; then
 				touch /sh/cftest/version
 				echo "1.0.0" > /sh/cftest/version
-			
+				download_secend_cfworktools
 			fi
         exit 1
     fi
