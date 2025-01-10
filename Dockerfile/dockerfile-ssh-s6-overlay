@@ -1,6 +1,6 @@
 # 一致性构建镜像 buildah bud --no-cache -f dockerfiles -t 容器名
-
-FROM aspnmy/debian:base-v12.7
+# 从官方镜像重新构建降低镜像大小
+FROM debian:latest
 
 ARG S6_OVERLAY_VERSION=3.2.0.0
 # 更改主服务名称 只需在此配置变量名即可 其他服务无需理会
