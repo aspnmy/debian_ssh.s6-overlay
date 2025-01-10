@@ -1,6 +1,6 @@
 # 一致性构建镜像 buildah bud --no-cache -f dockerfiles -t 容器名
 
-FROM aspnmy/debian:base
+FROM aspnmy/debian:base-v12.7
 
 ARG S6_OVERLAY_VERSION=3.2.0.0
 # 更改主服务名称 只需在此配置变量名即可 其他服务无需理会
@@ -27,18 +27,13 @@ ARG S6_OVERLAY_UPDATE_URL=https://github.com/just-containers/s6-overlay/releases
 # 更新软件包列表
 RUN apt-get update && apt-get install -y xz-utils openssh-server dos2unix
 
-# 复制自定义的sshd_config文件
-COPY /app/sshd_config /etc/ssh/sshd_config
-# 复制SSH公钥(可选-如果使用密钥登录)
-# COPY authorized_keys /root/.ssh/authorized_keys
-# RUN chmod 600 /root/.ssh/authorized_keys
+
+
 
 # 生成主服务${S6_OVERLAY_SERVIES}运行目录配置权限
 RUN  mkdir ${S6_SERVIES_RUNTIMES_PATH_01} && chmod 700 ${S6_SERVIES_RUNTIMES_PATH_01} && chown root:root ${S6_SERVIES_RUNTIMES_PATH_01}
-#RUN  mkdir ${S6_SERVIES_RUNTIMES_PATH_02} && chmod 700 ${S6_SERVIES_RUNTIMES_PATH_02} && chown root:root ${S6_SERVIES_RUNTIMES_PATH_02}
 
-# 设置初始root密码
-RUN echo 'root:root@#1314' | chpasswd
+
 
 #### --构建主服务${S6_OVERLAY_SERVIES}语句-结束
 
