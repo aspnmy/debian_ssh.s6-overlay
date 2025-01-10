@@ -2,7 +2,7 @@
 # 从官方镜像重新构建降低镜像大小
 FROM debian:latest
 
-ARG S6_OVERLAY_VERSION=3.2.0.0
+ARG S6_OVERLAY_VERSION=3.2.0.2
 # 更改主服务名称 只需在此配置变量名即可 其他服务无需理会
 ARG S6_OVERLAY_SERVIES=sshd
 # 主服务项目PATH
@@ -74,4 +74,4 @@ EXPOSE 622
 RUN sudo apt remove -y xz-utils dos2unix && sudo apt autoremove -y && sudo rm -rf /var/lib/apt/lists/* && sudo rm -rf /tmp/*
 
 # 设置s6-overla:v${S6_OVERLAY_VERSION}全局的ENTRYPOINT
-ENTRYPOINT ["/init"]
+ENTRYPOINT ["${S6_SERVIES_PATH}/run/${S6_OVERLAY_SERVIES}.run"]
