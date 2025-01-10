@@ -29,7 +29,7 @@ RUN mkdir -p /sh && mkdir -p /sh/cfworktools && apt update && apt install -y jq 
 #COPY /app/cfworktools/* /sh/cfworktools/
 #COPY /app/start.sh  /sh/start.sh
 #RUN  chmod +x /sh/start.sh  && 
-RUN sudo apt automove -y && sudo rm -rf /var/lib/apt/lists/* && sudo rm -rf /tmp/*
+RUN sudo apt autoremove -y && sudo rm -rf /var/lib/apt/lists/* && sudo rm -rf /tmp/*
 
 
 # 暴露622端口
