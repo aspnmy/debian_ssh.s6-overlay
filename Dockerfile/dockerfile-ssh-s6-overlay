@@ -71,7 +71,7 @@ EXPOSE 622
 
 
 # 清理缓存减小容器体积
-RUN apt remove xz-utils  dos2unix && apt autoremove && rm -rf /var/lib/apt/lists/* && rm -rf /tmp/*
+RUN apt remove -y xz-utils  dos2unix && apt automove && rm -rf /var/lib/apt/lists/* && rm -rf /tmp/*
 
 # 设置s6-overla:v${S6_OVERLAY_VERSION}全局的ENTRYPOINT
 ENTRYPOINT ["/init"]
