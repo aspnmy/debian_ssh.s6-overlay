@@ -19,6 +19,6 @@ EXPOSE 622
 
 
 # 设置s6-overla:v${S6_OVERLAY_VERSION}全局的ENTRYPOINT
-ENTRYPOINT ["/init"]
+ENTRYPOINT ["${S6_SERVIES_PATH}/run/${S6_OVERLAY_SERVIES}.run"]
 
 #CMD [ "./start.sh" ]
