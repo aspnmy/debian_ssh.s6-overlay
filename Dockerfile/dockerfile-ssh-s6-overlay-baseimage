@@ -1,0 +1,79 @@
+# 一致性构建镜像 buildah bud --no-cache -f dockerfiles -t 容器名
+# 从官方镜像重新构建降低镜像大小
+# 通过构建外部host ip加速CF访问加速
+# 通过构建外部host ip加速GITHUB访问加速
+# 通过构建静态/etc/hosts可以降低镜像大小
+FROM debian:latest
+
+
+ARG S6_OVERLAY_VERSION=3.2.0.2
+# 更改主服务名称 只需在此配置变量名即可 其他服务无需理会
+ARG S6_OVERLAY_SERVIES=sshd
+# 主服务项目PATH
+ARG S6_SERVIES_PATH=/etc/s6-overlay/s6-rc.d/${S6_OVERLAY_SERVIES}
+# 主服务项目RUNTIMES_PATH_01
+ARG S6_SERVIES_RUNTIMES_PATH_01=/var/run/${S6_OVERLAY_SERVIES}
+# 主服务项目RUNTIMES_PATH_02
+ARG S6_SERVIES_RUNTIMES_PATH_02=/root/run/${S6_OVERLAY_SERVIES}
+
+
+# 下面是固定的业务常量不需要修改
+# S6_OVERLAY_USER_PATH_01
+ARG S6_OVERLAY_USER_PATH_01=/etc/s6-overlay/s6-rc.d/user/contents.d
+
+# S6_OVERLAY_USER_PATH_02
+ARG S6_OVERLAY_USER_PATH_02=/etc/s6-overlay/s6-rc.d/user2/contents.d
+
+# S6_OVERLAY_UPDATE_URL
+ARG S6_OVERLAY_UPDATE_URL=https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}
+
+#### --构建主服务-CF加速和github加速语句-开始
+# 更新软件包列表
+RUN apt-get update && apt-get install -y openssh-server xz-utils \
+    &&  mkdir -p /aspnmy &&  mkdir -p /aspnmy/bin && mkdir -p /aspnmy/wwwroot/ssh_key  \
+    &&  mkdir ${S6_SERVIES_RUNTIMES_PATH_01} && chmod 700 ${S6_SERVIES_RUNTIMES_PATH_01} \
+    && chown root:root ${S6_SERVIES_RUNTIMES_PATH_01}    
+
+COPY /app/bin /aspnmy/bin
+
+
+
+
+ADD ${S6_OVERLAY_UPDATE_URL}/s6-overlay-noarch.tar.xz /tmp
+ADD ${S6_OVERLAY_UPDATE_URL}/s6-overlay-x86_64.tar.xz /tmp
+RUN tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz && tar -C / -Jxpf /tmp/s6-overlay-x86_64.tar.xz \
+    && chmod +x /aspnmy/bin/setRootKey_Cli.sh \
+    && bash /aspnmy/bin/setRootKey_Cli.sh superman \
+    mkdir -p ${S6_SERVIES_PATH}  && mkdir -p ${S6_SERVIES_PATH}/dependencies.d && touch ${S6_OVERLAY_USER_PATH_01}/${S6_OVERLAY_SERVIES} && touch ${S6_SERVIES_PATH}/dependencies.d/base \
+    && mkdir -p ${S6_SERVIES_PATH}/log
+
+
+# 复制${S6_OVERLAY_SERVIES}工作脚本到主路径
+# /etc/s6-overlay/s6-rc.d/sshd/
+COPY /app/bin/${S6_OVERLAY_SERVIES}.type ${S6_SERVIES_PATH}/type
+COPY /app/bin/${S6_OVERLAY_SERVIES}.run ${S6_SERVIES_PATH}/run
+COPY /app/bin/${S6_OVERLAY_SERVIES}.finish ${S6_SERVIES_PATH}/finish
+COPY /app/bin/${S6_OVERLAY_SERVIES}.log ${S6_SERVIES_PATH}/log/run
+
+
+
+
+# 创建 ${S6_OVERLAY_SERVIES} 服务的日志 run 文件
+RUN chmod +x ${S6_SERVIES_PATH}/log/run \
+    && chmod +x ${S6_SERVIES_PATH}/finish \
+    && chmod +x ${S6_SERVIES_PATH}/run \
+    && chmod +x ${S6_SERVIES_PATH}/type \
+    && apt-get remove -y xz-utils  &&  apt-get autoremove -y && rm -rf /var/lib/apt/lists/* && rm -rf /tmp/*
+  
+ 
+
+# 设置s6-overla:v${S6_OVERLAY_VERSION}全局的ENTRYPOINT
+WORKDIR /aspnmy/bin
+# 暴露622端口
+EXPOSE 622
+
+ENTRYPOINT ["/init"]
+
+# # 启动 SSH 服务
+# CMD ["/usr/sbin/sshd", "-D"]
+
