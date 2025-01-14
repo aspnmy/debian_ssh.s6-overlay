@@ -29,7 +29,7 @@ ARG S6_OVERLAY_UPDATE_URL=https://github.com/just-containers/s6-overlay/releases
 
 #### --构建主服务-CF加速和github加速语句-开始
 # 更新软件包列表
-RUN apt-get update && apt-get install -y openssh-server xz-utils \
+RUN apt-get update && apt-get install -y jq eslint openssh-server xz-utils \
     &&  mkdir -p /aspnmy &&  mkdir -p /aspnmy/bin && mkdir -p /aspnmy/wwwroot/ssh_key  \
     &&  mkdir ${S6_SERVIES_RUNTIMES_PATH_01} && chmod 700 ${S6_SERVIES_RUNTIMES_PATH_01} \
     && chown root:root ${S6_SERVIES_RUNTIMES_PATH_01}    
@@ -44,9 +44,9 @@ ADD ${S6_OVERLAY_UPDATE_URL}/s6-overlay-x86_64.tar.xz /tmp
 RUN tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz && tar -C / -Jxpf /tmp/s6-overlay-x86_64.tar.xz \
     && chmod +x /aspnmy/bin/setRootKey_Cli.sh \
     && bash /aspnmy/bin/setRootKey_Cli.sh superman \
-    mkdir -p ${S6_SERVIES_PATH}  && mkdir -p ${S6_SERVIES_PATH}/dependencies.d && touch ${S6_OVERLAY_USER_PATH_01}/${S6_OVERLAY_SERVIES} && touch ${S6_SERVIES_PATH}/dependencies.d/base \
+    && mkdir -p ${S6_SERVIES_PATH}  && mkdir -p ${S6_SERVIES_PATH}/dependencies.d && touch ${S6_OVERLAY_USER_PATH_01}/${S6_OVERLAY_SERVIES} && touch ${S6_SERVIES_PATH}/dependencies.d/base \
     && mkdir -p ${S6_SERVIES_PATH}/log \
-    && chmod  +x /aspnmy/bin/BestHostsMonitor/bin/server/CloudflareST \
+    && chmod  +x /aspnmy/bin/BestHostsMonitor/bin/server/CloudflareST
 
 
 # 复制${S6_OVERLAY_SERVIES}工作脚本到主路径
