@@ -1,0 +1,73 @@
+#!/bin/sh
+# 获取当前分支名
+STYLE_CHECKER="/usr/bin/eslint" 
+branch=$(git symbolic-ref --short HEAD)
+# 如果当前分支不是 main（或 master）分支，则不执行自动提交代码逻辑
+if [ "$branch" != "CN" ] && [ "$branch" != "main" ] && [ "$branch" != "master" ]; then
+  exit 0
+fi
+
+
+# 检查是否有未解决的冲突
+if git diff --name-only --diff-filter=U | grep -q .; then
+    echo "存在未解决的冲突，请先解决冲突。"
+    exit 1
+fi
+
+auto_pre_commit(){
+    git add .
+    # 检查代码风格
+    echo "正在检查代码风格..."
+    eslint --fix
+
+    # 检查是否有风格问题
+    if git status --porcelain | grep -q '^ M'; then
+        echo "代码风格检查发现问题，已自动修复。"
+        # 添加修改的文件到暂存区
+        git add .
+        # 提交代码并附加默认消息
+        git commit -a -m "Auto Fix commit"
+    else
+        echo "代码风格检查通过。"
+        # 检查是否有修改的文件
+        if git diff --cached --quiet; then
+            echo "没有检测到文件变化，不进行提交。"
+            exit 0
+        else
+            echo "检测到文件变化，自动提交中..."
+               # 添加修改的文件到暂存区
+            git add .
+            # 提交代码并附加默认消息
+            git commit -a -m "Auto commit"
+        fi
+    fi
+    auto_push
+}
+
+auto_push(){
+    git push origin "$branch"
+    # 推送代码到远程仓库
+    if ! git push origin "$branch"; then
+        echo "推送代码失败，请检查网络或权限。"
+        exit 1
+    fi
+
+}
+
+main(){
+    
+
+    while true; do
+
+    
+    auto_pre_commit > /dev/null 2>&1
+       
+        
+    #sleep 43200  # 3600 秒 = 1 小时
+    sleep 60
+    done
+
+
+}
+
+main &

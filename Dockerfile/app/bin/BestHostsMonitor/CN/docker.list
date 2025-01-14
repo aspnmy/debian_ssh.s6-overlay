@@ -1,0 +1,10 @@
+# docker-Aspnmy
+# /etc/docker/daemon.json
+
+
+{"bip":"172.17.0.1/24","log-level":"warn","iptables":true,"api-cors-header":"*","registry-mirrors":["https://drrpull.shdrr.org","https://docker.shdrr.org","https://docker.1panelproxy.com"]} 
+
+
+
+# 更新时间： 2025-01-15 00:00:15
+# sdocker-Aspnmy

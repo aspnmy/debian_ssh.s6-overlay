@@ -1,0 +1,70 @@
+# Your system has configured 'manage_etc_hosts' as True.
+# As a result, if you wish for changes to this file to persist
+# then you will need to either
+# a.) make changes to the master file in /etc/cloud/templates/hosts.debian.tmpl
+# b.) change or remove the value of 'manage_etc_hosts' in
+#     /etc/cloud/cloud.cfg or cloud-config from user-data
+#
+127.0.1.1 ser869268938484.local ser869268938484
+127.0.0.1 localhost
+
+# The following lines are desirable for IPv6 capable hosts
+::1 localhost ip6-localhost ip6-loopback
+ff02::1 ip6-allnodes
+ff02::2 ip6-allrouters
+
+104.26.12.205 api.ipify.org
+
+
+
+# github_BEST_Hosts_Aspnmy
+# github hosts
+# 加速 GitHub 访问
+
+140.82.113.25                 alive.github.com
+140.82.116.6                  api.github.com
+185.199.109.153               assets-cdn.github.com
+185.199.111.133               avatars.githubusercontent.com
+185.199.109.133               avatars0.githubusercontent.com
+185.199.110.133               avatars1.githubusercontent.com
+185.199.111.133               avatars2.githubusercontent.com
+185.199.110.133               avatars3.githubusercontent.com
+185.199.110.133               avatars4.githubusercontent.com
+185.199.111.133               avatars5.githubusercontent.com
+185.199.111.133               camo.githubusercontent.com
+140.82.112.22                 central.github.com
+185.199.110.133               cloud.githubusercontent.com
+140.82.116.10                 codeload.github.com
+140.82.114.21                 collector.github.com
+185.199.109.133               desktop.githubusercontent.com
+185.199.111.133               favicons.githubusercontent.com
+140.82.116.4                  gist.github.com
+54.231.198.73                 github-cloud.s3.amazonaws.com
+52.217.132.193                github-com.s3.amazonaws.com
+54.231.228.121                github-production-release-asset-2e65be.s3.amazonaws.com
+54.231.228.121                github-production-repository-file-5c1aeb.s3.amazonaws.com
+3.5.10.204                    github-production-user-asset-6210df.s3.amazonaws.com
+192.0.66.2                    github.blog
+140.82.116.4                  github.com
+140.82.112.18                 github.community
+185.199.108.154               github.githubassets.com
+151.101.1.194                 github.global.ssl.fastly.net
+185.199.109.153               github.io
+185.199.108.133               github.map.fastly.net
+185.199.109.153               githubstatus.com
+140.82.113.26                 live.github.com
+185.199.111.133               media.githubusercontent.com
+185.199.108.133               objects.githubusercontent.com
+13.107.42.16                  pipelines.actions.githubusercontent.com
+185.199.109.133               raw.githubusercontent.com
+185.199.108.133               user-images.githubusercontent.com
+13.107.253.69                 vscode.dev
+140.82.113.22                 education.github.com
+185.199.109.133               private-user-images.githubusercontent.com
+
+# 数据更新时间：1/15/2025, 04:34:00
+# github_BEST_Hosts_Aspnmy
+ # CF_BESTIP_HOSTS_Aspnmy
+190.93.244.118 *.cloudflare.com
+# 更新时间：2025-01-15 04:17:58
+# CF_BESTIP_HOSTS_Aspnmy 

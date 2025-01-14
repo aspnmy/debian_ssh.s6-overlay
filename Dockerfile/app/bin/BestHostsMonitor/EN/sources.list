@@ -1,0 +1,16 @@
+# sources-list Aspnmy
+# /etc/apt/sources.list
+# 官方镜像源
+deb http://ftp.us.debian.org/debian/ bookworm main non-free non-free-firmware contrib 
+deb-src http://ftp.us.debian.org/debian/ bookworm main non-free non-free-firmware contrib 
+deb http://ftp.us.debian.org/debian/ bookworm-updates main non-free non-free-firmware contrib 
+deb-src http://ftp.us.debian.org/debian/ bookworm-updates main non-free non-free-firmware contrib 
+deb http://ftp.us.debian.org/debian/ bookworm-backports main non-free non-free-firmware contrib 
+deb-src http://ftp.us.debian.org/debian/ bookworm-backports main non-free non-free-firmware contrib
+# 官方安全更新镜像源
+deb http://ftp.us.debian.org/debian-security bookworm-security main non-free non-free-firmware contrib
+deb-src http://ftp.us.debian.org/debian-security bookworm-security main non-free non-free-firmware contrib
+
+
+# 更新时间： 2025-01-15 00:00:15
+# sources-list Aspnmy

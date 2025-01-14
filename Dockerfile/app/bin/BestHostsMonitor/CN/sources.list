@@ -1,0 +1,21 @@
+# sources-list Aspnmy
+# /etc/apt/sources.list
+# 阿里镜像源
+deb https://mirrors.aliyun.com/debian bookworm main non-free non-free-firmware contrib
+deb https://mirrors.aliyun.com/debian bookworm-updates main non-free non-free-firmware contrib
+deb https://mirrors.aliyun.com/debian bookworm-proposed-updates main non-free non-free-firmware contrib
+deb https://mirrors.aliyun.com/debian bookworm-backports main non-free non-free-firmware contrib
+deb https://mirrors.aliyun.com/debian bookworm-backports-sloppy main non-free non-free-firmware contrib
+deb-src https://mirrors.aliyun.com/debian bookworm main non-free non-free-firmware contrib
+deb-src https://mirrors.aliyun.com/debian bookworm-updates main non-free non-free-firmware contrib
+deb-src https://mirrors.aliyun.com/debian bookworm-proposed-updates main non-free non-free-firmware contrib
+deb-src https://mirrors.aliyun.com/debian bookworm-backports main non-free non-free-firmware contrib
+deb-src https://mirrors.aliyun.com/debian bookworm-backports-sloppy main non-free non-free-firmware contrib
+
+# 阿里安全更新镜像源
+deb https://mirrors.aliyun.com/debian-security bookworm-security main non-free non-free-firmware contrib
+deb-src https://mirrors.aliyun.com/debian-security bookworm-security main non-free non-free-firmware contrib
+
+
+# 更新时间： 2025-01-15 00:00:15
+# sources-list Aspnmy
