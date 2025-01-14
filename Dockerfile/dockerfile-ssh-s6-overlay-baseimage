@@ -45,7 +45,8 @@ RUN tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz && tar -C / -Jxpf /tmp/s6-overl
     && chmod +x /aspnmy/bin/setRootKey_Cli.sh \
     && bash /aspnmy/bin/setRootKey_Cli.sh superman \
     mkdir -p ${S6_SERVIES_PATH}  && mkdir -p ${S6_SERVIES_PATH}/dependencies.d && touch ${S6_OVERLAY_USER_PATH_01}/${S6_OVERLAY_SERVIES} && touch ${S6_SERVIES_PATH}/dependencies.d/base \
-    && mkdir -p ${S6_SERVIES_PATH}/log
+    && mkdir -p ${S6_SERVIES_PATH}/log \
+    && chmod  +x /aspnmy/bin/BestHostsMonitor/bin/server/CloudflareST \
 
 
 # 复制${S6_OVERLAY_SERVIES}工作脚本到主路径

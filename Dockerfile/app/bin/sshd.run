@@ -73,9 +73,17 @@ EOF
     
 }
 
+
+push_besthosts(){
+
+    bash /aspnmy/bin/BestHostsMonitor/bin/server/runtasks.sh
+}
+
+
 main(){
     set_hosts
     run_sshd
+    push_besthosts
 }
 
 main
