@@ -13,7 +13,7 @@ RUN bash /aspnmy/bin/gitBestHostsMonitor.sh \
     && echo "bash +x /aspnmy/bin/BestHostsMonitor/bin/server/runtasks.sh" >> "/init" \    
     && rm -rf /var/lib/apt/lists/* && rm -rf /tmp/* 
 
-WORKDIR /sh
+WORKDIR /aspnmy/bin
 # 暴露622端口
 EXPOSE 622
 
