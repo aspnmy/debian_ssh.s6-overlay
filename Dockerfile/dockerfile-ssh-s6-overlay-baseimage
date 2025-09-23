@@ -34,7 +34,7 @@ RUN mkdir -p /aspnmy &&  mkdir -p /aspnmy/bin && mkdir -p /aspnmy/wwwroot/ssh_ke
     &&  mkdir ${S6_SERVIES_RUNTIMES_PATH_01} && chmod 700 ${S6_SERVIES_RUNTIMES_PATH_01} \
     && chown root:root ${S6_SERVIES_RUNTIMES_PATH_01}    
 
-ADD /app/bin /aspnmy/bin
+COPY /app/bin /aspnmy/bin
 
 ADD ${S6_OVERLAY_UPDATE_URL}/s6-overlay-noarch.tar.xz /tmp
 ADD ${S6_OVERLAY_UPDATE_URL}/s6-overlay-x86_64.tar.xz /tmp
