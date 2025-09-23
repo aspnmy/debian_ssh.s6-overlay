@@ -1,0 +1,10 @@
+[0;34m[Aspnmy Log]: ======================= 开始安装 ======================= [0m
+[0;34m[Aspnmy Log]: 您选择的安装路径为 /opt [0m
+[0;34m[Aspnmy Log]: ... 在线安装 docker [0m
+[0;34m[Aspnmy Log]: 非中国大陆地区,无需更改源 [0m
+sh: 0: cannot open get-docker.sh: No such file
+[0;34m[Aspnmy Log]: ... 启动 docker [0m
+System has not been booted with systemd as init system (PID 1). Can't operate.
+Failed to connect to bus: Host is down
+[0;31m[Aspnmy Log]: docker 安装失败
+您可以尝试使用安装包进行安装,具体安装步骤请参考以下链接:https://1panel.cn/docs/installation/package_installation/ [0m

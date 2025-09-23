@@ -45,9 +45,9 @@ auto_pre_commit(){
 }
 
 auto_push(){
-    git push origin "$branch"
+    git push main "$branch"
     # 推送代码到远程仓库
-    if ! git push origin "$branch"; then
+    if ! git push main "$branch"; then
         echo "推送代码失败，请检查网络或权限。"
         exit 1
     fi

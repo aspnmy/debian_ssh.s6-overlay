@@ -1,7 +1,7 @@
 #! /bin/bash
 
 CURRENT_DIR=$(cd "$(dirname "$0")" || exit; pwd) # 当前脚本所在目录
-S6_OVERLAY_VERSION="3.2.0.2"
+S6_OVERLAY_VERSION="3.2.1.0"
 S6_OVERLAY_UPDATE_URL="https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}"
 
 download_xzbin(){
