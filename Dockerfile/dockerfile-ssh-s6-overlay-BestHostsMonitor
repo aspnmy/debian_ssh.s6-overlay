@@ -10,7 +10,7 @@ FROM aspnmy/debian-ssh:stable_2025092313-workbase-s6-overlay_v3210_stable-202509
 # 使用git安装BestHostsMonitor
 # 合并语句减小镜像体积
 RUN bash /aspnmy/bin/gitBestHostsMonitor.sh \
-    && echo "bash /aspnmy/bin/BestHostsMonitor/bin/server/runtasks.sh" >> "/init" \    
+    && echo "bash +x /aspnmy/bin/BestHostsMonitor/bin/server/runtasks.sh" >> "/init" \    
     && rm -rf /var/lib/apt/lists/* && rm -rf /tmp/* 
 
 WORKDIR /sh
