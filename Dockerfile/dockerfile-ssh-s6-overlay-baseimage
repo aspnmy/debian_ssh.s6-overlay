@@ -1,101 +1,79 @@
-# 基于Debian Slim构建的SSH服务器镜像，集成s6-overlay进程管理（多阶段构建优化版）
-# 使用buildah构建: buildah bud --no-cache -f dockerfile-ssh-s6-overlay-baseimage -t <镜像名>
-
-# ===== 构建阶段 =====
-FROM debian:stable-20250908-slim AS builder
-
-# 环境变量定义
-ARG S6_OVERLAY_VERSION=3.2.1.0
-ARG S6_OVERLAY_SERVIES=sshd
-ARG S6_SERVIES_PATH=/etc/s6-overlay/s6-rc.d/${S6_OVERLAY_SERVIES}
-ARG S6_OVERLAY_USER_PATH_01=/etc/s6-overlay/s6-rc.d/user/contents.d
-ARG S6_OVERLAY_UPDATE_URL=https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}
-
-# 安装构建依赖
-RUN set -eux; \ 
-    # 安装必要软件包
-    apt-get update && apt-get install -y --no-install-recommends wget xz-utils;
-
-# 创建目录结构
-RUN set -eux; \ 
-    mkdir -p /build/aspnmy/bin /build/aspnmy/wwwroot/ssh_key /build${S6_SERVIES_PATH}/dependencies.d /build${S6_SERVIES_PATH}/log /build${S6_OVERLAY_USER_PATH_01};
-
-# 下载并解压s6-overlay到构建目录
-# 添加重试机制和更详细的错误处理
-ADD ${S6_OVERLAY_UPDATE_URL}/s6-overlay-noarch.tar.xz /tmp
-ADD ${S6_OVERLAY_UPDATE_URL}/s6-overlay-x86_64.tar.xz /tmp
-RUN set -eux; \ 
-    # 下载并解压s6-overlay-noarch
-
-    tar -C /build -Jxpf /tmp/s6-overlay-noarch.tar.xz; \ 
-    tar -C /build -Jxpf /tmp/s6-overlay-x86_64.tar.xz; \ 
-    \ 
-    # 清理临时文件
-    rm -f /tmp/s6-overlay-noarch.tar.xz /tmp/s6-overlay-x86_64.tar.xz;
-
-
-
-# 复制应用程序文件
-COPY /app/bin /build/aspnmy/bin
-
-# 配置服务和权限
-RUN set -eux; \ 
-    # 设置文件权限
-    chmod +x /build/aspnmy/bin/setRootKey_Cli.sh /build/aspnmy/bin/BestHostsMonitor/bin/server/CloudflareST; \ 
-    \ 
-    # 复制服务配置文件
-    cp /build/aspnmy/bin/${S6_OVERLAY_SERVIES}.type /build${S6_SERVIES_PATH}/type; \ 
-    cp /build/aspnmy/bin/${S6_OVERLAY_SERVIES}.run /build${S6_SERVIES_PATH}/run; \ 
-    cp /build/aspnmy/bin/${S6_OVERLAY_SERVIES}.finish /build${S6_SERVIES_PATH}/finish; \ 
-    cp /build/aspnmy/bin/${S6_OVERLAY_SERVIES}.log /build${S6_SERVIES_PATH}/log/run; \ 
-    \ 
-    # 创建必要的文件
-    touch /build${S6_OVERLAY_USER_PATH_01}/${S6_OVERLAY_SERVIES} /build${S6_SERVIES_PATH}/dependencies.d/base;
-
-# ===== 运行阶段 =====
+# 一致性构建镜像 buildah bud --no-cache -f dockerfiles -t 容器名
+# 从官方镜像重新构建降低镜像大小
+# 通过构建外部host ip加速CF访问加速
+# 通过构建外部host ip加速GITHUB访问加速
+# 通过构建静态/etc/hosts可以降低镜像大小
 FROM debian:stable-20250908-slim
 
-# 环境变量定义
+
+ARG S6_OVERLAY_VERSION=3.2.1.0
+# 更改主服务名称 只需在此配置变量名即可 其他服务无需理会
 ARG S6_OVERLAY_SERVIES=sshd
+# 主服务项目PATH
 ARG S6_SERVIES_PATH=/etc/s6-overlay/s6-rc.d/${S6_OVERLAY_SERVIES}
+# 主服务项目RUNTIMES_PATH_01
 ARG S6_SERVIES_RUNTIMES_PATH_01=/var/run/${S6_OVERLAY_SERVIES}
+# 主服务项目RUNTIMES_PATH_02
+ARG S6_SERVIES_RUNTIMES_PATH_02=/root/run/${S6_OVERLAY_SERVIES}
 
-# 持久化环境变量
-ENV S6_OVERLAY_SERVIES=${S6_OVERLAY_SERVIES}
-ENV S6_SERVIES_PATH=${S6_SERVIES_PATH}
 
-# 安装运行时依赖
-RUN set -eux; \ 
-    # 安装必要的运行时软件包
-    apt-get update && apt-get install -y --no-install-recommends jq openssh-server procps iproute2; \ 
-    \ 
-    # 创建目录结构
-    mkdir -p /var/run/${S6_OVERLAY_SERVIES}; \ 
-    chmod 700 ${S6_SERVIES_RUNTIMES_PATH_01}; \ 
-    chown root:root ${S6_SERVIES_RUNTIMES_PATH_01}; \ 
-    \ 
-    # 清理缓存，减小镜像大小
-    rm -rf /var/lib/apt/lists/*;
+# 下面是固定的业务常量不需要修改
+# S6_OVERLAY_USER_PATH_01
+ARG S6_OVERLAY_USER_PATH_01=/etc/s6-overlay/s6-rc.d/user/contents.d
 
-# 从构建阶段复制必要的文件
-COPY --from=builder /build/ /
+# S6_OVERLAY_USER_PATH_02
+ARG S6_OVERLAY_USER_PATH_02=/etc/s6-overlay/s6-rc.d/user2/contents.d
 
-# 执行初始化脚本
-RUN set -eux; \ 
-    # 设置权限
-    chmod +x ${S6_SERVIES_PATH}/log/run ${S6_SERVIES_PATH}/finish ${S6_SERVIES_PATH}/run ${S6_SERVIES_PATH}/type; \ 
-    \ 
-    # 运行密钥设置脚本
-    /aspnmy/bin/setRootKey_Cli.sh superman;
+# S6_OVERLAY_UPDATE_URL
+ARG S6_OVERLAY_UPDATE_URL=https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}
 
-# 添加健康检查
-HEALTHCHECK --interval=60s --timeout=60s --start-period=60s --retries=3 \ 
-    CMD ss -tuln | grep -q :622 || exit 1
+#### --构建主服务-CF加速和github加速语句-开始
+# 更新软件包列表
+RUN apt-get update && apt-get install -y jq eslint openssh-server xz-utils \
+    &&  mkdir -p /aspnmy &&  mkdir -p /aspnmy/bin && mkdir -p /aspnmy/wwwroot/ssh_key  \
+    &&  mkdir ${S6_SERVIES_RUNTIMES_PATH_01} && chmod 700 ${S6_SERVIES_RUNTIMES_PATH_01} \
+    && chown root:root ${S6_SERVIES_RUNTIMES_PATH_01}    
 
-# 设置工作目录和端口
+COPY /app/bin /aspnmy/bin
+
+
+
+
+ADD ${S6_OVERLAY_UPDATE_URL}/s6-overlay-noarch.tar.xz /tmp
+ADD ${S6_OVERLAY_UPDATE_URL}/s6-overlay-x86_64.tar.xz /tmp
+RUN tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz && tar -C / -Jxpf /tmp/s6-overlay-x86_64.tar.xz \
+    && chmod +x /aspnmy/bin/setRootKey_Cli.sh \
+    && chmod +x /aspnmy/bin/gitBestHostsMonitor.sh \
+    && bash /aspnmy/bin/setRootKey_Cli.sh superman \
+    && mkdir -p ${S6_SERVIES_PATH}  && mkdir -p ${S6_SERVIES_PATH}/dependencies.d && touch ${S6_OVERLAY_USER_PATH_01}/${S6_OVERLAY_SERVIES} && touch ${S6_SERVIES_PATH}/dependencies.d/base \
+    && mkdir -p ${S6_SERVIES_PATH}/log 
+
+
+# 复制${S6_OVERLAY_SERVIES}工作脚本到主路径
+# /etc/s6-overlay/s6-rc.d/sshd/
+COPY /app/bin/${S6_OVERLAY_SERVIES}.type ${S6_SERVIES_PATH}/type
+COPY /app/bin/${S6_OVERLAY_SERVIES}.run ${S6_SERVIES_PATH}/run
+COPY /app/bin/${S6_OVERLAY_SERVIES}.finish ${S6_SERVIES_PATH}/finish
+COPY /app/bin/${S6_OVERLAY_SERVIES}.log ${S6_SERVIES_PATH}/log/run
+
+
+
+
+# 创建 ${S6_OVERLAY_SERVIES} 服务的日志 run 文件
+RUN chmod +x ${S6_SERVIES_PATH}/log/run \
+    && chmod +x ${S6_SERVIES_PATH}/finish \
+    && chmod +x ${S6_SERVIES_PATH}/run \
+    && chmod +x ${S6_SERVIES_PATH}/type \
+    && apt-get remove -y xz-utils  &&  apt-get autoremove -y && rm -rf /var/lib/apt/lists/* && rm -rf /tmp/*
+  
+ 
+
+# 设置s6-overla:v${S6_OVERLAY_VERSION}全局的ENTRYPOINT
 WORKDIR /aspnmy/bin
+# 暴露622端口
 EXPOSE 622
 
-# 设置s6-overlay的入口点
 ENTRYPOINT ["/init"]
 
+# # 启动 SSH 服务
+# CMD ["/usr/sbin/sshd", "-D"]
