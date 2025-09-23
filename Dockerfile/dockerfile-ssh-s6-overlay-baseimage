@@ -22,14 +22,18 @@ RUN set -eux; \
 
 # 下载并解压s6-overlay到构建目录
 # 添加重试机制和更详细的错误处理
+ADD ${S6_OVERLAY_UPDATE_URL}/s6-overlay-noarch.tar.xz /tmp
+ADD ${S6_OVERLAY_UPDATE_URL}/s6-overlay-x86_64.tar.xz /tmp
 RUN set -eux; \ 
     # 下载并解压s6-overlay-noarch
-    wget -q --retry-connrefused --waitretry=1 --read-timeout=60 --timeout=60 -t 5 -O- "${S6_OVERLAY_UPDATE_URL}/s6-overlay-noarch.tar.xz" \ 
-    | tar -C /build -Jxpf -; \ 
+
+    tar -C /build -Jxpf /tmp/s6-overlay-noarch.tar.xz; \ 
+    tar -C /build -Jxpf /tmp/s6-overlay-x86_64.tar.xz; \ 
     \ 
-    # 下载并解压s6-overlay-x86_64
-    wget -q --retry-connrefused --waitretry=1 --read-timeout=60 --timeout=60 -t 5 -O- "${S6_OVERLAY_UPDATE_URL}/s6-overlay-x86_64.tar.xz" \ 
-    | tar -C /build -Jxpf -;
+    # 清理临时文件
+    rm -f /tmp/s6-overlay-noarch.tar.xz /tmp/s6-overlay-x86_64.tar.xz;
+
+
 
 # 复制应用程序文件
 # COPY /app/bin /build/aspnmy/bin
