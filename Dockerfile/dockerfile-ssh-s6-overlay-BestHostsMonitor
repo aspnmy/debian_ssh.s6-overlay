@@ -1,6 +1,5 @@
 # 一致性构建镜像 buildah bud --no-cache -f dockerfiles -t 容器名
-
-FROM aspnmy/debian-ssh:s6-overlay-v12.7-devworker-base
+FROM aspnmy/debian-ssh:stable_s6-overlay_v3210_stable-20250908
 
 
 

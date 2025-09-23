@@ -84,7 +84,7 @@ push_besthosts(){
 main(){
     set_hosts
     run_sshd
-    push_besthosts
+    #push_besthosts
 }
 
 main
