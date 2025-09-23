@@ -2,7 +2,7 @@
 URI="docker.io"
 AUUSER="aspnmy"
 imgNAME="debian-ssh"
-s6OverlayVer="v3.2.1.0"
+s6OverlayVer="3.2.1.0"
 debianVer="stable-20250908-slim"
 timeBuild=$(date +"%Y%m%d%H%M%S")
 ver="${timeBuild}_s6_overlay_v${s6OverlayVer}_${debianVer}_baseimage"
