@@ -8,8 +8,7 @@
     #ver="${timeBuild}_s6-overlay_v${s6OverlayVer}_${debianVer}"
     stableVer="stable_${timeBuild}-workbase-s6-overlay_v${s6OverlayVer}_${debianVer}"
 
-    buildah bud --no-cache -f  ./dockerfile-ssh-s6-overlay-baseimage -t $URI/$AUUSER/$imgNAME:$stableVer 
+    buildah bud --no-cache -f  ./dockerfile-ssh-s6-overlay-workbaseimage -t $URI/$AUUSER/$imgNAME:$stableVer 
     #buildah tag $URI/$AUUSER/$imgNAME:$ver $URI/$AUUSER/$imgNAME:$stableVer
     #buildah push $URI/$AUUSER/$imgNAME:$ver
     buildah push $URI/$AUUSER/$imgNAME:$stableVer 
-    return "$URI/$AUUSER/$imgNAME:$stableVer"
