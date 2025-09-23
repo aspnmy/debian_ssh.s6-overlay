@@ -8,7 +8,7 @@
 #ARG BASE_IMAGE_TAG=docker.io/aspnmy/debian-ssh:stable-2025092312-slim_baseimage
 
 # 使用传入的基础镜像标签
-FROM docker.io/aspnmy/debian-ssh:stable-2025092312-slim_baseimage
+FROM docker.io/aspnmy/debian-ssh:stable-2025092313-slim_baseimage
 
 
 ARG S6_OVERLAY_VERSION=3.2.1.0
