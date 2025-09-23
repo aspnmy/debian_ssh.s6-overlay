@@ -1,11 +1,16 @@
 #!/bin/sh
 
+# 当前脚本所在目录
+CURRENT_DIR=$(cd "$(dirname "$0")" || exit; pwd) # 当前脚本所在目录
+PARENT_DIR=$(dirname "$CURRENT_DIR") # 当前脚本所在目录的上级目录
+ROOT_DIR=$(dirname "$PARENT_DIR") # 当前脚本所在目录的上上上级目录(根目录)
+set -e  # 严格模式，任何错误终止执行
 branch=$(git symbolic-ref --short HEAD)
-# 如果当前分支不是 main（或 master）分支，则不执行自动提交代码逻辑
-if [ "$branch" != "CN" ] && [ "$branch" != "main" ] && [ "$branch" != "master" ]; then
-  exit 0
-fi
-
+# # 如果当前分支不是 main（或 master）分支，则不执行自动提交代码逻辑
+# if [ "$branch" != "devbox" ] &&[ "$branch" != "CN" ] && [ "$branch" != "main" ] && [ "$branch" != "master" ]; then
+#   exit 0
+# fi
+cd "$ROOT_DIR" || exit 1
 
 # 检查是否有未解决的冲突
 if git diff --name-only --diff-filter=U | grep -q .; then
@@ -14,10 +19,12 @@ if git diff --name-only --diff-filter=U | grep -q .; then
 fi
 
 auto_pre_commit(){
+    cd "$ROOT_DIR" || exit 1
     git add .
     # 检查代码风格
     echo "正在检查代码风格..."
-    eslint --fix
+    # apt update && apt install -y eslint
+    # eslint --fix
 
     # 检查是否有风格问题
     if git status --porcelain | grep -q '^ M'; then
@@ -25,7 +32,7 @@ auto_pre_commit(){
         # 添加修改的文件到暂存区
         git add .
         # 提交代码并附加默认消息
-        git commit -a -m "Auto Fix commit"
+        git commit -a -m "Auto UpdateDate commit"
     else
         echo "代码风格检查通过。"
         # 检查是否有修改的文件
@@ -37,36 +44,36 @@ auto_pre_commit(){
                # 添加修改的文件到暂存区
             git add .
             # 提交代码并附加默认消息
-            git commit -a -m "Auto commit"
+            git commit -a -m "Auto UpdateDate commit"
         fi
     fi
+
     auto_push
 }
 
 auto_push(){
-    git push main "$branch"
+    cd "$ROOT_DIR" || exit 1
+
     # 推送代码到远程仓库
-    if ! git push main "$branch"; then
-        echo "推送代码失败，请检查网络或权限。"
+    if ! git push origin "$branch"; then
+        echo "推送[origin]代码失败，请检查远程仓库名。"
+    else if  ! git push main "$branch"; then
+        echo "推送[main]代码失败，请检查远程仓库名。"
         exit 1
     fi
-
 }
 
 main(){
     
 
-    while true; do
-
-    
-    auto_pre_commit > /dev/null 2>&1
-       
-        
+    while true; do    
+    #auto_pre_commit > /dev/null 2>&1
+    auto_pre_commit
     #sleep 43200  # 3600 秒 = 1 小时
-    sleep 60
+    sleep 600
     done
 
 
 }
 
-main
+main &
