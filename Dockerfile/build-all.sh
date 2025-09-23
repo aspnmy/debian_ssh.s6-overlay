@@ -53,27 +53,27 @@ build_stable_BestHostsMonitor(){
 
 main(){    
     # 构建基础镜像 
-    build_stable_slim   
-    # local base_image=$(build_stable_slim)    
-    # echo "基础镜像构建完成: $base_image"
+     
+    local base_image=$(build_stable_slim)    
+    echo "基础镜像构建完成: $base_image"
     
-    # # 确保基础镜像构建成功才继续    
-    # if [ -z "$base_image" ]; then        
-    #     echo "错误：基础镜像构建失败，无法继续"        
-    #     exit 1    
-    # fi    
-    # # 构建应用工作镜像，传递基础镜像标签    
-    # local work_image=$(build_stable_workbase "$base_image")    
-    # echo "应用工作镜像构建完成: $work_image"
+    # 确保基础镜像构建成功才继续    
+    if [ -z "$base_image" ]; then        
+        echo "错误：基础镜像构建失败，无法继续"        
+        exit 1    
+    fi    
+    # 构建应用工作镜像，传递基础镜像标签    
+    local work_image=$(build_stable_workbase "$base_image")    
+    echo "应用工作镜像构建完成: $work_image"
     
-    # # 确保工作镜像构建成功才继续    
-    # if [ -z "$work_image" ]; then        
-    #     echo "错误：应用工作镜像构建失败，无法继续"        
-    #     exit 1    
-    # fi    
-    # # 构建BestHostsMonitor应用镜像，传递工作镜像标签    
-    # local best_hosts_image=$(build_stable_BestHostsMonitor "$work_image")    
-    # echo "BestHostsMonitor应用镜像构建完成: $best_hosts_image"
+    # 确保工作镜像构建成功才继续    
+    if [ -z "$work_image" ]; then        
+        echo "错误：应用工作镜像构建失败，无法继续"        
+        exit 1    
+    fi    
+    # 构建BestHostsMonitor应用镜像，传递工作镜像标签    
+    local best_hosts_image=$(build_stable_BestHostsMonitor "$work_image")    
+    echo "BestHostsMonitor应用镜像构建完成: $best_hosts_image"
     
 }
 
