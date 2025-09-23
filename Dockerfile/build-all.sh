@@ -25,7 +25,7 @@ build_stable_workbase(){
     timeBuild=$(date +"%Y%m%d%H")    
     #从base_image_tag中提取debianVer    
     debianVer=$(echo "$base_image_tag" | awk -F: '{print $2}' | sed 's/^stable-[0-9]*-//')    
-    stableVer="stable_${timeBuild}-s6-overlay_v${s6OverlayVer}_${debianVer}"    
+    stableVer="stable_${timeBuild}-s6-overlay_v${s6OverlayVer}_workbase_${debianVer}"    
     # 使用--build-arg参数将基础镜像标签传递给Dockerfile    
     buildah bud --no-cache -f ./dockerfile-ssh-s6-overlay-baseimage --build-arg BASE_IMAGE_TAG="$base_image_tag" -t $URI/$AUUSER/$imgNAME:$stableVer    
     buildah push $URI/$AUUSER/$imgNAME:$stableVer    
