@@ -36,7 +36,7 @@ RUN set -eux; \
 
 
 # 复制应用程序文件
-# COPY /app/bin /build/aspnmy/bin
+COPY /app/bin /build/aspnmy/bin
 
 # 配置服务和权限
 RUN set -eux; \ 
