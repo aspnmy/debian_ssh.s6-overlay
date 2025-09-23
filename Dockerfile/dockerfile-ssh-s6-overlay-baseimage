@@ -3,7 +3,8 @@
 # 通过构建外部host ip加速CF访问加速
 # 通过构建外部host ip加速GITHUB访问加速
 # 通过构建静态/etc/hosts可以降低镜像大小
-FROM aspnmy/debian-ssh:2025092311_stable-20250908-slim_baseimage
+#docker.io/aspnmy/debian-ssh:stable-2025092311-slim_baseimage
+FROM aspnmy/debian-ssh:stable-2025092311-slim_baseimage
 
 
 ARG S6_OVERLAY_VERSION=3.2.1.0
