@@ -8,4 +8,5 @@ timeBuild=$(date +"%Y%m%d")
 ver="${timeBuild}_s6-overlay_v${s6OverlayVer}_${debianVer}"
 
 buildah bud --no-cache -f  ./dockerfile-ssh-s6-overlay-baseimage -t $URI/$AUUSER/$imgNAME:$ver 
+buildah tag $URI/$AUUSER/$imgNAME:$ver
 buildah push $URI/$AUUSER/$imgNAME:$ver
