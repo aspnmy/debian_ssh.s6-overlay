@@ -31,7 +31,8 @@ ARG S6_OVERLAY_UPDATE_URL=https://github.com/just-containers/s6-overlay/releases
 #### --构建主服务-CF加速和github加速语句-开始
 # 更新软件包列表
 RUN mkdir -p /aspnmy &&  mkdir -p /aspnmy/bin && mkdir -p /aspnmy/wwwroot/ssh_key  \
-    &&  mkdir ${S6_SERVIES_RUNTIMES_PATH_01} && chmod 700 ${S6_SERVIES_RUNTIMES_PATH_01} \
+    &&  if [ ! -d "${S6_SERVIES_RUNTIMES_PATH_01}" ]; then mkdir -p ${S6_SERVIES_RUNTIMES_PATH_01}; fi \
+    && chmod 700 ${S6_SERVIES_RUNTIMES_PATH_01} \
     && chown root:root ${S6_SERVIES_RUNTIMES_PATH_01}    
 
 COPY /app/bin /aspnmy/bin
