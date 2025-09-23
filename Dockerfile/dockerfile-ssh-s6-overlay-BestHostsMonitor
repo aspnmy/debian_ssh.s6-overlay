@@ -3,7 +3,7 @@
 #ARG BASE_IMAGE_TAG=aspnmy/debian-ssh:stable_s6-overlay_v3210_stable-20250908-slim
 
 # 使用传入的基础镜像标签
-FROM aspnmy/debian-ssh:stable_2025092314-workbase-s6-overlay_v3210_stable-20250908-slim
+FROM docker.io/aspnmy/debian-ssh:stable_2025092318-workbase-s6-overlay_v3210_stable-20250908-slim
 # # 复制root-sshkey管理工具
 # /aspnmy/bin/setRootKey_Cli.sh 已经存在
 # 使用git安装BestHostsMonitor
