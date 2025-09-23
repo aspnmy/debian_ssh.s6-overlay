@@ -73,5 +73,5 @@ EXPOSE 622
 
 ENTRYPOINT ["/init"]
 
-# 启动 SSH 服务
-CMD ["/usr/sbin/sshd", "-D"]
+# # 启动 SSH 服务
+# CMD ["/usr/sbin/sshd", "-D"]
