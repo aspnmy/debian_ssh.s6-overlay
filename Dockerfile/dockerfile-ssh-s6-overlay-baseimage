@@ -5,10 +5,10 @@
 # 通过构建静态/etc/hosts可以降低镜像大小
 
 # 定义基础镜像标签构建参数，默认值用于本地测试
-ARG BASE_IMAGE_TAG=docker.io/aspnmy/debian-ssh:stable-2025092312-slim_baseimage
+#ARG BASE_IMAGE_TAG=docker.io/aspnmy/debian-ssh:stable-2025092312-slim_baseimage
 
 # 使用传入的基础镜像标签
-FROM ${BASE_IMAGE_TAG}
+FROM docker.io/aspnmy/debian-ssh:stable-2025092312-slim_baseimage
 
 
 ARG S6_OVERLAY_VERSION=3.2.1.0
