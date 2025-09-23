@@ -5,7 +5,10 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \  
     curl \ 
     xz-utils\
-    wget \       
+    wget \
+    openssh \
+    vim\  
+    jq\     
     && rm -rf /var/lib/apt/lists/*
 
 # 继续构建你的应用...
