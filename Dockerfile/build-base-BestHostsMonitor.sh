@@ -2,13 +2,13 @@
 URI="docker.io"
 AUUSER="aspnmy"
 imgNAME="debian-ssh"
-imgNAMEBase="debian"
 s6OverlayVer="3210"
 debianVer="stable-20250908-slim"
-ver="s6_overlay_v${s6OverlayVer}_${debianVer}_baseimage"
+timeBuild=$(date +"%Y%m%d%H")
+ver="${timeBuild}_s6_overlay_v${s6OverlayVer}_${debianVer}_BestHostsMonitor"
+stableVer="stable_s6-overlay_v${s6OverlayVer}_${debianVer}_BestHostsMonitor"
 
-docker build --no-cache -f ./dockerfile-ssh-s6-overlay-baseimage \
-        -t $URI/$AUUSER/$imgNAME:$ver .
-docker tag $URI/$AUUSER/$imgNAME:$ver $URI/$AUUSER/$imgNAMEBase:$ver
-docker push $URI/$AUUSER/$imgNAME:$ver
-docker push $URI/$AUUSER/$imgNAMEBase:$ver
+buildah bud --no-cache -f  ./dockerfile-ssh-s6-overlay-BestHostsMonitor -t $URI/$AUUSER/$imgNAME:$ver
+buildah tag $URI/$AUUSER/$imgNAME:$ver $URI/$AUUSER/$imgNAME:$stableVer
+buildah push $URI/$AUUSER/$imgNAME:$ver
+buildah push $URI/$AUUSER/$imgNAME:$stableVer

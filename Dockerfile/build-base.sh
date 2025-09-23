@@ -4,7 +4,7 @@ AUUSER="aspnmy"
 imgNAME="debian-ssh"
 s6OverlayVer="3210"
 debianVer="stable-20250908-slim"
-timeBuild=$(date +"%Y%m%d")
+timeBuild=$(date +"%Y%m%d%H")
 
 ver="${timeBuild}_s6-overlay_v${s6OverlayVer}_${debianVer}"
 stableVer="stable_s6-overlay_v${s6OverlayVer}_${debianVer}"
