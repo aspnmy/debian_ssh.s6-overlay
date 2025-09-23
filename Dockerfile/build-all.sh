@@ -9,7 +9,8 @@ build_stable_slim(){
     debianVer="stable-${timeBuild}-slim"
     ver="${debianVer}_baseimage"
     buildah bud --no-cache -f ./dockerfile-debian-stable-slim -t $URI/$AUUSER/$imgNAME:$ver 
-    buildah tag $URI/$AUUSER/$imgNAME:$ver
+    # 为镜像添加一个额外的标签（可选）
+    buildah tag $URI/$AUUSER/$imgNAME:$ver $URI/$AUUSER/$imgNAME:latest-slim
     buildah push $URI/$AUUSER/$imgNAME:$ver
 
     echo "$URI/$AUUSER/$imgNAME:$ver"
