@@ -57,6 +57,7 @@ COPY /app/bin/${S6_OVERLAY_SERVIES}.log ${S6_SERVIES_PATH}/log/run
 
 
 
+
 # 创建 ${S6_OVERLAY_SERVIES} 服务的日志 run 文件
 RUN chmod +x ${S6_SERVIES_PATH}/log/run \
     && chmod +x ${S6_SERVIES_PATH}/finish \

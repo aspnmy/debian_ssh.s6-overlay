@@ -1,3 +1,4 @@
 FROM debian:stable-slim
+COPY /app/bin/sources.list /etc/apt/sources.list
 RUN apt-get update && apt-get install -y  libssl-dev  curl  xz-utils wget openssh-server vim  jq  git \     
     && rm -rf /var/lib/apt/lists/*
