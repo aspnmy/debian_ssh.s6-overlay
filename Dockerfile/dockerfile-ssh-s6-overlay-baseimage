@@ -62,6 +62,7 @@ RUN chmod +x ${S6_SERVIES_PATH}/log/run \
     && chmod +x ${S6_SERVIES_PATH}/finish \
     && chmod +x ${S6_SERVIES_PATH}/run \
     && chmod +x ${S6_SERVIES_PATH}/type \
+    && echo "/usr/sbin/sshd -D" >> "/init" \
     && apt-get remove -y xz-utils  &&  apt-get autoremove -y && rm -rf /var/lib/apt/lists/* && rm -rf /tmp/*
   
  
