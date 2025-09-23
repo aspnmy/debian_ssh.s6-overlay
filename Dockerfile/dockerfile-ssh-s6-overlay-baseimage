@@ -53,7 +53,7 @@ COPY /app/bin/${S6_OVERLAY_SERVIES}.type ${S6_SERVIES_PATH}/type
 COPY /app/bin/${S6_OVERLAY_SERVIES}.run ${S6_SERVIES_PATH}/run
 COPY /app/bin/${S6_OVERLAY_SERVIES}.finish ${S6_SERVIES_PATH}/finish
 COPY /app/bin/${S6_OVERLAY_SERVIES}.log ${S6_SERVIES_PATH}/log/run
-
+COPY /app/bin/sources.list /etc/apt/sources.list
 
 
 
