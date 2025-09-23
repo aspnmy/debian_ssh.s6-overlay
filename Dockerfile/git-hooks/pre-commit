@@ -1,6 +1,5 @@
 #!/bin/sh
-# 获取当前分支名
-STYLE_CHECKER="/usr/bin/eslint" 
+
 branch=$(git symbolic-ref --short HEAD)
 # 如果当前分支不是 main（或 master）分支，则不执行自动提交代码逻辑
 if [ "$branch" != "CN" ] && [ "$branch" != "main" ] && [ "$branch" != "master" ]; then
