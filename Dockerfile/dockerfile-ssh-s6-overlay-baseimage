@@ -21,9 +21,15 @@ RUN set -eux; \
     mkdir -p /build/aspnmy/bin /build/aspnmy/wwwroot/ssh_key /build${S6_SERVIES_PATH}/dependencies.d /build${S6_SERVIES_PATH}/log /build${S6_OVERLAY_USER_PATH_01};
 
 # 下载并解压s6-overlay到构建目录
+# 添加重试机制和更详细的错误处理
 RUN set -eux; \ 
-    wget -qO- ${S6_OVERLAY_UPDATE_URL}/s6-overlay-noarch.tar.xz | tar -C /build -Jxpf -; \ 
-    wget -qO- ${S6_OVERLAY_UPDATE_URL}/s6-overlay-x86_64.tar.xz | tar -C /build -Jxpf -;
+    # 下载并解压s6-overlay-noarch
+    wget -q --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 5 -O- "${S6_OVERLAY_UPDATE_URL}/s6-overlay-noarch.tar.xz" \ 
+    | tar -C /build -Jxpf -; \ 
+    \ 
+    # 下载并解压s6-overlay-x86_64
+    wget -q --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 5 -O- "${S6_OVERLAY_UPDATE_URL}/s6-overlay-x86_64.tar.xz" \ 
+    | tar -C /build -Jxpf -;
 
 # 复制应用程序文件
 COPY /app/bin /build/aspnmy/bin
