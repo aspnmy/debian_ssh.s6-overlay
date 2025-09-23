@@ -3,7 +3,7 @@ URI="docker.io"
 AUUSER="aspnmy"
 imgNAME="debian-ssh"
 imgNAMEBase="debian"
-s6OverlayVer="v3.2.1.0"
+s6OverlayVer="3210"
 debianVer="stable-20250908-slim"
 ver="s6_overlay_v${s6OverlayVer}_${debianVer}_baseimage"
 
