@@ -3,7 +3,8 @@
 # 通过构建外部host ip加速CF访问加速
 # 通过构建外部host ip加速GITHUB访问加速
 # 通过构建静态/etc/hosts可以降低镜像大小
-FROM debian:stable-20250908-slim
+# docker pull aspnmy/debian-ssh:stable-20250908-slim_baseimage
+FROM aspnmy/debian-ssh:stable-20250908-slim_baseimage
 
 
 ARG S6_OVERLAY_VERSION=3.2.1.0
@@ -29,15 +30,11 @@ ARG S6_OVERLAY_UPDATE_URL=https://github.com/just-containers/s6-overlay/releases
 
 #### --构建主服务-CF加速和github加速语句-开始
 # 更新软件包列表
-RUN apt-get update && apt-get install -y jq eslint openssh-server xz-utils \
-    &&  mkdir -p /aspnmy &&  mkdir -p /aspnmy/bin && mkdir -p /aspnmy/wwwroot/ssh_key  \
+RUN mkdir -p /aspnmy &&  mkdir -p /aspnmy/bin && mkdir -p /aspnmy/wwwroot/ssh_key  \
     &&  mkdir ${S6_SERVIES_RUNTIMES_PATH_01} && chmod 700 ${S6_SERVIES_RUNTIMES_PATH_01} \
     && chown root:root ${S6_SERVIES_RUNTIMES_PATH_01}    
 
-COPY /app/bin /aspnmy/bin
-
-
-
+ADD /app/bin /aspnmy/bin
 
 ADD ${S6_OVERLAY_UPDATE_URL}/s6-overlay-noarch.tar.xz /tmp
 ADD ${S6_OVERLAY_UPDATE_URL}/s6-overlay-x86_64.tar.xz /tmp
@@ -75,5 +72,5 @@ EXPOSE 622
 
 ENTRYPOINT ["/init"]
 
-# # 启动 SSH 服务
-# CMD ["/usr/sbin/sshd", "-D"]
+# 启动 SSH 服务
+CMD ["/usr/sbin/sshd", "-D"]
