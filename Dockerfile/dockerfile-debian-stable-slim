@@ -8,7 +8,8 @@ RUN apt-get update && apt-get install -y \
     wget \
     openssh-server \
     vim\  
-    jq\     
-    && rm -rf /var/lib/apt/lists/*
+    jq\
+    git \     
+    && rm -rf /var/lib/apt/lists/* && rm -rf /tmp/*
 
 # 继续构建你的应用...
