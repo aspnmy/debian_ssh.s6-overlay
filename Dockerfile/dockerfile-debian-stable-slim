@@ -4,12 +4,13 @@ FROM debian:stable-slim
 RUN apt-get update && apt-get install -y \
     libssl-dev \  
     curl \ 
-    xz-utils\
+    xz-utils \
     wget \
     openssh-server \
-    vim\  
-    jq\
+    vim \  
+    jq \
     git \     
-    && rm -rf /var/lib/apt/lists/* && rm -rf /tmp/*
+    && rm -rf /var/lib/apt/lists/*
+    
 
 # 继续构建你的应用...
