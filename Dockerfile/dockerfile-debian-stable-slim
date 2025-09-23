@@ -1,0 +1,11 @@
+FROM debian:stable-slim
+
+# 示例：安装缺失的库和工具（根据实际报错调整）
+RUN apt-get update && apt-get install -y \
+    libssl-dev \  
+    curl \ 
+    xz-utils\
+    wget \       
+    && rm -rf /var/lib/apt/lists/*
+
+# 继续构建你的应用...
