@@ -1,7 +1,9 @@
 # 一致性构建镜像 buildah bud --no-cache -f dockerfiles -t 容器名
-FROM aspnmy/debian-ssh:stable_s6-overlay_v3210_stable-20250908-slim
+# 定义基础镜像标签构建参数，默认值用于本地测试
+ARG BASE_IMAGE_TAG=aspnmy/debian-ssh:stable_s6-overlay_v3210_stable-20250908-slim
 
-
+# 使用传入的基础镜像标签
+FROM ${BASE_IMAGE_TAG}
 
 # # 复制root-sshkey管理工具
 # /aspnmy/bin/setRootKey_Cli.sh 已经存在
