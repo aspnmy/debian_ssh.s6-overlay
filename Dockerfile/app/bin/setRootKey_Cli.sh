@@ -266,71 +266,15 @@ restart_sshd(){
                     echo "systemctl命令失败，尝试使用service命令"
                     service ssh restart
                 }
-                ;;
-            alpine)
-                # Alpine系统尝试多种方法重启SSH服务
-                echo "检测到Alpine系统，尝试重启SSH服务"
-                
-                # 方法1: 尝试使用rc-service命令
-                if command -v rc-service &> /dev/null; then
-                    echo "使用rc-service重启SSH服务"
-                    rc-service sshd restart && return 0
-                fi
-                
-                # 方法2: 尝试使用service命令
-                if command -v service &> /dev/null; then
-                    echo "rc-service命令不存在，尝试使用service命令"
-                    service sshd restart && return 0
-                fi
-                
-                # 方法3: 尝试直接使用init.d脚本
-                if [ -f /etc/init.d/sshd ]; then
-                    echo "service命令不存在，尝试使用init.d脚本"
-                    /etc/init.d/sshd restart && return 0
-                fi
-
-                # 方法4: 尝试直接使用/usr/sbin/sshd
-                if [ -f /usr/sbin/sshd]; then
-                    echo "service命令不存在，尝试使用/usr/sbin/sshd"
-                    /usr/sbin/sshd restart && return 0
-                fi
-                
-                
-                
-                echo "所有重启SSH服务的方法都失败了！"
-                return 1
-                ;;
+                ;; 
             *)
                 # 默认尝试多种方法
                 echo "未识别的系统类型，尝试重启SSH服务"
                 
-                # 方法1: 尝试使用systemctl命令
-                if command -v systemctl &> /dev/null; then
-                    echo "尝试使用systemctl重启SSH服务"
-                    systemctl restart sshd && return 0
+                if [ -f /usr/sbin/sshd]; then
+                    echo "service命令不存在，尝试使用/usr/sbin/sshd"
+                    /usr/sbin/sshd restart && return 0
                 fi
-                
-                # 方法2: 尝试使用service命令
-                if command -v service &> /dev/null; then
-                    echo "systemctl命令不存在，尝试使用service命令"
-                    service ssh restart || service sshd restart && return 0
-                fi
-                
-                # 方法3: 尝试使用rc-service命令
-                if command -v rc-service &> /dev/null; then
-                    echo "service命令不存在，尝试使用rc-service命令"
-                    rc-service sshd restart && return 0
-                fi
-                
-                # 方法4: 尝试直接使用init.d脚本
-                if [ -f /etc/init.d/sshd ]; then
-                    echo "rc-service命令不存在，尝试使用init.d脚本"
-                    /etc/init.d/sshd restart && return 0
-                elif [ -f /etc/init.d/ssh ]; then
-                    echo "sshd init.d脚本不存在，尝试使用ssh init.d脚本"
-                    /etc/init.d/ssh restart && return 0
-                fi
-                
                 echo "所有重启SSH服务的方法都失败了！"
                 return 1
                 ;;
@@ -339,33 +283,10 @@ restart_sshd(){
         # 如果无法读取系统信息，尝试多种方法
         echo "无法确定系统类型，尝试多种方法重启SSH服务"
         
-        # 方法1: 尝试使用systemctl命令
-        if command -v systemctl &> /dev/null; then
-            echo "尝试使用systemctl重启SSH服务"
-            systemctl restart sshd && return 0
-        fi
-        
-        # 方法2: 尝试使用service命令
-        if command -v service &> /dev/null; then
-            echo "systemctl命令不存在，尝试使用service命令"
-            service ssh restart || service sshd restart && return 0
-        fi
-        
-        # 方法3: 尝试使用rc-service命令
-        if command -v rc-service &> /dev/null; then
-            echo "service命令不存在，尝试使用rc-service命令"
-            rc-service sshd restart && return 0
-        fi
-        
-        # 方法4: 尝试直接使用init.d脚本
-        if [ -f /etc/init.d/sshd ]; then
-            echo "rc-service命令不存在，尝试使用init.d脚本"
-            /etc/init.d/sshd restart && return 0
-        elif [ -f /etc/init.d/ssh ]; then
-            echo "sshd init.d脚本不存在，尝试使用ssh init.d脚本"
-            /etc/init.d/ssh restart && return 0
-        fi
-        
+                if [ -f /usr/sbin/sshd]; then
+                    echo "service命令不存在，尝试使用/usr/sbin/sshd"
+                    /usr/sbin/sshd restart && return 0
+                fi
         echo "所有重启SSH服务的方法都失败了！"
         return 1
     fi
