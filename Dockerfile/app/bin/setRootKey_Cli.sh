@@ -190,11 +190,11 @@ get_Time() {
 # 配置纯-sshkey登陆模式-超级用户模式-如果用户忘记下载私钥，可以用超级用户模式重置指定的私钥文件
 set_sshd_config_sshkey_superman(){
     # 检测系统类型
-    local use_pam_value="no"
+    local use_pam_value="UsePAM yes"
     if [ -f /etc/os-release ]; then
         . /etc/os-release
-        if [ "$ID" = "debian" ]; then
-            use_pam_value="yes"
+        if [ "$ID" = "alpine" ]; then
+            use_pam_value="#UsePAM no"
         fi
     fi
  cat <<EOF > $sshd_config_file
@@ -206,7 +206,7 @@ PermitRootLogin yes
 # 使用密钥可以关闭密码 如需开起下方改成yes
 PasswordAuthentication no
 ChallengeResponseAuthentication no
-UsePAM $use_pam_value
+$use_pam_value
 X11Forwarding yes
 AllowTcpForwarding yes
 PrintMotd no
@@ -225,11 +225,11 @@ EOF
 # 设置UsePAM参数，Debian系统设为yes，其他设为no
 set_sshd_config_sshkey_usr(){ 
     # 检测系统类型
-    local use_pam_value="no"
+    local use_pam_value="UsePAM yes"
     if [ -f /etc/os-release ]; then
         . /etc/os-release
-        if [ "$ID" = "debian" ]; then
-            use_pam_value="yes"
+        if [ "$ID" = "alpine" ]; then
+            use_pam_value="#UsePAM no"
         fi
     fi
     
@@ -242,7 +242,7 @@ PermitRootLogin yes
 # 使用密钥可以关闭密码 如需开起下方改成yes
 PasswordAuthentication no
 ChallengeResponseAuthentication no
-UsePAM $use_pam_value
+$use_pam_value
 X11Forwarding yes
 AllowTcpForwarding yes
 PrintMotd no
