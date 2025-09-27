@@ -99,8 +99,7 @@ setSSH_init(){
     fi
     # setIntFile
     # chmod +x $IntFile
-    # #ssh-keygen -t rsa -b 4096 -f /etc/ssh/ssh_host_rsa_key -N ""
-
+    yes | ssh-keygen -t rsa -b 4096 -m PEM -f "$PRIVATE_KEY_PATH" -N ""
 }
 
 backup_sshd_config(){
