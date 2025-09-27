@@ -42,7 +42,7 @@ start_sshd(){
 }
 
 
-reset_sshd(){
+restart_sshd(){
 # 先停止当前的sshd服务
     if pkill -f sshd; then
         echo "已停止当前的sshd服务"
@@ -62,8 +62,8 @@ reset_sshd(){
 
 main(){
      case "$1" in
-        "reset")
-            reset_sshd
+        "restart")
+            restart_sshd
             ;;
         "start")
             start_sshd
@@ -126,7 +126,7 @@ start_sshd(){
 }
 
 
-reset_sshd(){
+restart_sshd(){
 # 先停止当前的sshd服务
     if pkill -f sshd; then
         echo "已停止当前的sshd服务"
