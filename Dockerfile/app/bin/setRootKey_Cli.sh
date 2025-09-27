@@ -109,41 +109,23 @@ backup_sshd_config(){
 
 stop_sshd(){
     # 停止当前的sshd服务
-    if pkill -f sshd; then
+    pkill -f sshd
         echo "已停止当前的sshd服务"
-    else
-        echo "没有运行中的sshd服务或停止失败"
-    fi
+    
 }
 
 start_sshd(){
 # 启动sshd服务
-    if /usr/sbin/sshd -D; then
-        echo "sshd服务已成功启动"
-        return 0
-    else
-        echo "sshd服务启动失败！"
-        return 1
-    fi
+    /usr/sbin/sshd -D
+    echo "已启动当前的sshd服务"
 }
 
 
 restart_sshd(){
 # 先停止当前的sshd服务
-    if pkill -f sshd; then
-        echo "已停止当前的sshd服务"
-    else
-        echo "没有运行中的sshd服务或停止失败"
-    fi
-    
-    # 启动sshd服务
-    if /usr/sbin/sshd -D; then
-        echo "sshd服务已成功启动"
-        return 0
-    else
-        echo "sshd服务启动失败！"
-        return 1
-    fi
+    pkill -f sshd
+    /usr/sbin/sshd -D
+    echo "重启当前的sshd服务"
 }
 
 # 超级用户的公钥写入程序
