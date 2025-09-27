@@ -22,8 +22,15 @@ backup_sshd_config(){
 # 超级用户的公钥写入程序
 set_sshd_sshkey_superman_pub(){
     # 无论是否存在先删除再写入
- rm -rf $sshkey_superman_pub
- cat <<EOF > $sshkey_superman_pub
+    # 首先增加判断文件是否存在 不存在先增加
+    # 如果存在则先删除再写入，保证每次写入的公钥一致性
+    if [ ! -f "$sshkey_superman_pub" ]; then
+        touch $sshkey_superman_pub
+    else
+        rm -rf $sshkey_superman_pub
+    fi
+# 写入一致性的公钥
+cat <<EOF > $sshkey_superman_pub
 ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAgEA1LQu/qYOWWPFXxCiVSCNnyB/aZwPaoEtODxK58bCslu+Y8VIMQGT4OOzgS3vmNfXGAO/LVYS47HDwaw1h6bjdo/uNz22EQ7eLB0JBIaAn9QUO0aknKQSjiZG3mhNSNjtUNWZwHKchI5xiY5LJRGNnqlx3rSzEKNi2rXguyVFzomL8fpGN+iI8s4Z3DlRCtECcFWasBQdadT/Z9oLLyv4LqO2W1dSKu2eNJm2jmJA//3yw5JLApTwWXlTKbV81vTuDTFb9hoPxI7oLrF4DXlMYEpuclkdo3Ss5G+eFFUjrNhFY+y0EgqL8c3f5JjBeYxrWnpzTEeh954Kaaa3Dj2lgOhgwNi1aJ4tA0h5TySaB6+1Vg8RI9sapE9MYMfTDM+TkOy5dpAKfhtfPWOdkykDY+3P0keXFCAe3WpJWECQyOSWyUhRIMnQ4/wPEqPrhVIa4DY+AEKuJirPYTowsdtnZxgnSAevz2WOZ+HXfaHXUqRAkf8Q+8GCCXXXVYuaFZ+QpdcltrY6MMdwUAxP17xTTEs/fSAwCKQ8cQeEchQ4qcpEAHWMEx4g1ivoqr14NMNbvgmAFDDghJr0NThfzKGeCn9SbCP/Bfr8pYsmuf+bva210j4FofudbO8VdxqnmTRlGy79Ka2ECAO20DxPjSonzxgbJvnOzA1wwWxqv1Xq9Kc=
 EOF
 }
@@ -228,14 +235,54 @@ mail_test() {
 }
 
 restart_sshd(){
-    # 重启 SSH 服务
-     systemctl restart sshd
+    # 检测系统类型并重启 SSH 服务
+    if [ -f /etc/os-release ]; then
+        # 读取系统信息
+        . /etc/os-release
+        
+        # 判断系统类型
+        case "$ID" in
+            debian)
+                # Debian系统使用systemctl
+                echo "检测到Debian系统，使用systemctl重启SSH服务"
+                systemctl restart sshd
+                ;;
+            alpine)
+                # Alpine系统使用rc-service
+                echo "检测到Alpine系统，使用rc-service重启SSH服务"
+                rc-service sshd restart
+                ;;
+            *)
+                # 默认使用systemctl
+                echo "未识别的系统类型，尝试使用systemctl重启SSH服务"
+                systemctl restart sshd || {
+                    echo "systemctl命令失败，尝试使用rc-service"
+                    rc-service sshd restart
+                }
+                ;;
+        esac
+    else
+        # 如果无法读取系统信息，尝试两种方法
+        echo "无法确定系统类型，尝试使用systemctl重启SSH服务"
+        systemctl restart sshd || {
+            echo "systemctl命令失败，尝试使用rc-service"
+            rc-service sshd restart
+        }
+    fi
 }
 
 set_hosts(){
+    # 从 GitHub 获取最新的 hosts 文件
+    bestHosts=$(wget -qO- "https://raw.githubusercontent.com/aspnmy/BestHostsMonitor/refs/heads/devbox/CN/besthosts.list")
+    if [ -n "$bestHosts" ]; then
+        # 写入 hosts 文件
+        echo "$bestHosts" > /etc/hosts
+        echo "已更新 /etc/hosts 文件"
+    else
+        echo "获取 BestHostsMonitor 失败，使用默认 hosts 文件"
+    fi
 cat > /etc/hosts << EOF
 
-127.0.1.1 ser869268938484.local ser869268938484
 127.0.0.1 localhost
 
 # The following lines are desirable for IPv6 capable hosts
