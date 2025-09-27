@@ -11,7 +11,7 @@ stop_sshd(){
 
 start_sshd(){
 # 启动sshd服务
-    if /usr/sbin/sshd -D; then
+    if -f /usr/sbin/sshd -f /etc/ssh/sshd_config; then
         echo "sshd服务已成功启动"
         return 0
     else
@@ -30,7 +30,7 @@ restart_sshd(){
     fi
     
     # 启动sshd服务
-    if /usr/sbin/sshd -D; then
+    if /usr/sbin/sshd -f /etc/ssh/sshd_config; then
         echo "sshd服务已成功启动"
         return 0
     else
