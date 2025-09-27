@@ -73,7 +73,7 @@ main(){
             ;;
         *)
             echo "无效的选择。请使用以下格式运行脚本："
-            echo "Int 'reset'"
+            echo "Int 'restart'"
             echo "Int 'start'"
             echo "Int 'stop'"  
             exit 1
