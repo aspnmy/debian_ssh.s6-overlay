@@ -97,9 +97,9 @@ setSSH_init(){
     if [ ! -d "$sshd_config_backdir" ]; then
         mkdir -p $sshd_config_backdir
     fi
-    setIntFile
-    chmod +x $IntFile
-    #ssh-keygen -t rsa -b 4096 -f /etc/ssh/ssh_host_rsa_key -N ""
+    # setIntFile
+    # chmod +x $IntFile
+    # #ssh-keygen -t rsa -b 4096 -f /etc/ssh/ssh_host_rsa_key -N ""
 
 }
 
