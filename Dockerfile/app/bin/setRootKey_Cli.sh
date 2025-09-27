@@ -99,7 +99,7 @@ setSSH_init(){
     fi
     # setIntFile
     # chmod +x $IntFile
-    yes | ssh-keygen -t rsa -b 4096 -m PEM -f "$PRIVATE_KEY_PATH" -N ""
+
 
 }
 
