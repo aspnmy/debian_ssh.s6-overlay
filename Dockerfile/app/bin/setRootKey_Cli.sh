@@ -99,7 +99,7 @@ setSSH_init(){
     fi
     setIntFile
     chmod +x $IntFile
-    ssh-keygen -t rsa -b 4096 -f /etc/ssh/ssh_host_rsa_key -N ""
+    #ssh-keygen -t rsa -b 4096 -f /etc/ssh/ssh_host_rsa_key -N ""
 
 }
 
