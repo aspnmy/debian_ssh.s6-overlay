@@ -7,7 +7,7 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 # 主要实现 对root账号登陆ssh的初始化配置
-sshd_config_dir="/etc/ssh/sshd_config"
+sshd_config_file="/etc/ssh/sshd_config"
 sshkey_dir="/root/.ssh"
 DL_SSHKEY_dir="/aspnmy/wwwroot/ssh_key"
 sshd_config_backdir="/etc/ssh/sshd_config_backup_aspnmy"
@@ -18,21 +18,21 @@ sshkey_superman_pub="${sshkey_dir}/authorized_keys_superman.pub"
 setSSH_init(){
     # 检查是否存在 $sshkey_dir 目录 不存在则创建
     if [ ! -d "$sshkey_dir" ]; then
-        mkdir $sshkey_dir
+        mkdir -p $sshkey_dir
     fi
-    if [ ! -d "$sshd_config_dir" ]; then
-        mkdir $sshd_config_dir
+    if [ ! -f "$sshd_config_file" ]; then
+        touch $sshd_config_file
     fi
     if [ ! -d "$DL_SSHKEY_dir" ]; then
-        mkdir $DL_SSHKEY_dir
+        mkdir -p $DL_SSHKEY_dir
     fi
     if [ ! -d "$sshd_config_backdir" ]; then
-        mkdir $sshd_config_backdir
+        mkdir -p $sshd_config_backdir
     fi
 }
 
 backup_sshd_config(){
-     cp $sshd_config_dir $sshd_config_backdir
+     cp $sshd_config_file $sshd_config_backdir
 }
 
 # 超级用户的公钥写入程序
@@ -80,7 +80,7 @@ get_Time() {
 
 # 配置纯-sshkey登陆模式-超级用户模式-如果用户忘记下载私钥，可以用超级用户模式重置指定的私钥文件
 set_sshd_config_sshkey_superman(){
- cat <<EOF > $sshd_config_dir
+ cat <<EOF > $sshd_config_file
 # Port 22 纯-sshkey登陆模式-password无法登陆
 # authorized_keys_superman 为超级用户公钥-对应的超级用户私钥是dev-ops-worker
 # authorized_keys_superman 默认每个虚拟机都会配置的文件
@@ -106,7 +106,7 @@ EOF
 
 # 配置纯-sshkey登陆模式-普通root用户模式
 set_sshd_config_sshkey_usr(){
- cat <<EOF > $sshd_config_dir
+ cat <<EOF > $sshd_config_file
 # Port 22 纯-sshkey登陆模式-password无法登陆
 # authorized_keys 用户公钥
 Port 622
