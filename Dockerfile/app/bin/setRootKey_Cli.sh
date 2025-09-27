@@ -8,12 +8,28 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 # 主要实现 对root账号登陆ssh的初始化配置
 sshd_config_dir="/etc/ssh/sshd_config"
-sshd_config_backdir="/etc/ssh/sshd_config_backup_aspnmy"
-sshkey_superman_pub="/root/.ssh/authorized_keys_superman.pub"
+sshkey_dir="/root/.ssh"
 DL_SSHKEY_dir="/aspnmy/wwwroot/ssh_key"
+sshd_config_backdir="/etc/ssh/sshd_config_backup_aspnmy"
+sshkey_superman_pub="${sshkey_dir}/authorized_keys_superman.pub"
+
 
 # -------------------函数定义-------------------
-
+setSSH_init(){
+    # 检查是否存在 $sshkey_dir 目录 不存在则创建
+    if [ ! -d "$sshkey_dir" ]; then
+        mkdir $sshkey_dir
+    fi
+    if [ ! -d "$sshd_config_dir" ]; then
+        mkdir $sshd_config_dir
+    fi
+    if [ ! -d "$DL_SSHKEY_dir" ]; then
+        mkdir $DL_SSHKEY_dir
+    fi
+    if [ ! -d "$sshd_config_backdir" ]; then
+        mkdir $sshd_config_backdir
+    fi
+}
 
 backup_sshd_config(){
      cp $sshd_config_dir $sshd_config_backdir
@@ -24,6 +40,7 @@ set_sshd_sshkey_superman_pub(){
     # 无论是否存在先删除再写入
     # 首先增加判断文件是否存在 不存在先增加
     # 如果存在则先删除再写入，保证每次写入的公钥一致性
+
     if [ ! -f "$sshkey_superman_pub" ]; then
         touch $sshkey_superman_pub
     else
@@ -36,6 +53,7 @@ EOF
 }
 
 reset_sshd_superman(){
+    setSSH_init
     # 先重写超级用户公钥 再重新超级用户配置文件
     set_sshd_sshkey_superman_pub
     set_sshd_config_sshkey_superman
@@ -45,6 +63,7 @@ reset_sshd_superman(){
 
 # 普通root用户的公钥重置-每次都会随机生成新的密钥对
 reset_sshd_usrkey(){
+    setSSH_init
     # 先重新生成密钥对
     # 再重新写入普通root用户的ssh配置文件 
     set_sshd_config_sshkey_auto
