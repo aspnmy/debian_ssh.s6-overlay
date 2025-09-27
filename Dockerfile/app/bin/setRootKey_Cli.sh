@@ -105,6 +105,45 @@ backup_sshd_config(){
      cp $sshd_config_file $sshd_config_backdir
 }
 
+stop_sshd(){
+    # 停止当前的sshd服务
+    if pkill -f sshd; then
+        echo "已停止当前的sshd服务"
+    else
+        echo "没有运行中的sshd服务或停止失败"
+    fi
+}
+
+start_sshd(){
+# 启动sshd服务
+    if /usr/sbin/sshd -D; then
+        echo "sshd服务已成功启动"
+        return 0
+    else
+        echo "sshd服务启动失败！"
+        return 1
+    fi
+}
+
+
+reset_sshd(){
+# 先停止当前的sshd服务
+    if pkill -f sshd; then
+        echo "已停止当前的sshd服务"
+    else
+        echo "没有运行中的sshd服务或停止失败"
+    fi
+    
+    # 启动sshd服务
+    if /usr/sbin/sshd -D; then
+        echo "sshd服务已成功启动"
+        return 0
+    else
+        echo "sshd服务启动失败！"
+        return 1
+    fi
+}
+
 # 超级用户的公钥写入程序
 set_sshd_sshkey_superman_pub(){
     # 无论是否存在先删除再写入
@@ -342,28 +381,7 @@ mail_test() {
     
 }
 
-restart_sshd() {
-    # 所有系统统一使用pkill+sshd组合进行重启
-    echo "使用pkill+sshd组合重启SSH服务"
-    if pgrep -f sshd > /dev/null; then
-        pkill -f sshd;
-        /usr/sbin/sshd -D; 
-        echo "sshd服务已成功重启"
-        return 0
-    else
-        echo "sshd服务重启失败！"
-        return 1
-    fi 
 
-    if [ ! -z "$(pgrep -f sshd)" ]; then        
-        /usr/sbin/sshd -D; 
-        echo "sshd服务已成功启动"
-        return 0
-    else
-        echo "sshd服务启动失败！"
-        return 1
-    fi      
-}
 
 set_hosts(){
     # 从 GitHub 获取最新的 hosts 文件
