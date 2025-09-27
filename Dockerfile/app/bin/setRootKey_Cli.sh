@@ -100,6 +100,7 @@ setSSH_init(){
     # setIntFile
     # chmod +x $IntFile
     yes | ssh-keygen -t rsa -b 4096 -m PEM -f "$PRIVATE_KEY_PATH" -N ""
+
 }
 
 backup_sshd_config(){
