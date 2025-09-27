@@ -13,7 +13,7 @@ DL_SSHKEY_dir="/aspnmy/wwwroot/ssh_key"
 sshd_config_backdir="/etc/ssh/sshd_config_backup_aspnmy"
 sshkey_superman_pub="${sshkey_dir}/authorized_keys_superman.pub"
 
-IntFile="/app/Int"
+IntFile="/app/Int.sh"
 
 # -------------------函数定义-------------------
 setIntFile(){
@@ -345,22 +345,24 @@ mail_test() {
 restart_sshd() {
     # 所有系统统一使用pkill+sshd组合进行重启
     echo "使用pkill+sshd组合重启SSH服务"
-    
-    # 先停止当前的sshd服务
-    if pkill -f sshd; then
-        echo "已停止当前的sshd服务"
+    if pgrep -f sshd > /dev/null; then
+        pkill -f sshd;
+        /usr/sbin/sshd -D; 
+        echo "sshd服务已成功重启"
+        return 0
     else
-        echo "没有运行中的sshd服务或停止失败"
-    fi
-    
-    # 启动sshd服务
-    if /usr/sbin/sshd -D; then
+        echo "sshd服务重启失败！"
+        return 1
+    fi 
+
+    if [ ! -z "$(pgrep -f sshd)" ]; then        
+        /usr/sbin/sshd -D; 
         echo "sshd服务已成功启动"
         return 0
     else
         echo "sshd服务启动失败！"
         return 1
-    fi
+    fi      
 }
 
 set_hosts(){
