@@ -78,6 +78,14 @@ get_Time() {
 
 # 配置纯-sshkey登陆模式-超级用户模式-如果用户忘记下载私钥，可以用超级用户模式重置指定的私钥文件
 set_sshd_config_sshkey_superman(){
+    # 检测系统类型
+    local use_pam_value="no"
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        if [ "$ID" = "debian" ]; then
+            use_pam_value="yes"
+        fi
+    fi
  cat <<EOF > $sshd_config_file
 # Port 22 纯-sshkey登陆模式-password无法登陆
 # authorized_keys_superman 为超级用户公钥-对应的超级用户私钥是dev-ops-worker
@@ -87,14 +95,14 @@ PermitRootLogin yes
 # 使用密钥可以关闭密码 如需开起下方改成yes
 PasswordAuthentication no
 ChallengeResponseAuthentication no
-UsePAM yes
+UsePAM $use_pam_value
 X11Forwarding yes
 AllowTcpForwarding yes
 PrintMotd no
 AcceptEnv LANG LC_*
 Subsystem sftp /usr/lib/openssh/sftp-server
 PubkeyAuthentication yes
-AuthorizedKeysFile .ssh/authorized_keys_superman.pub
+AuthorizedKeysFile ${sshkey_dir}/authorized_keys_superman.pub
 
 EOF
 
@@ -103,8 +111,19 @@ EOF
 }
 
 # 配置纯-sshkey登陆模式-普通root用户模式
-set_sshd_config_sshkey_usr(){
- cat <<EOF > $sshd_config_file
+# 设置UsePAM参数，Debian系统设为yes，其他设为no
+set_sshd_config_sshkey_usr(){ 
+    # 检测系统类型
+    local use_pam_value="no"
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        if [ "$ID" = "debian" ]; then
+            use_pam_value="yes"
+        fi
+    fi
+    
+    # 创建配置文件
+    cat <<EOF > $sshd_config_file
 # Port 22 纯-sshkey登陆模式-password无法登陆
 # authorized_keys 用户公钥
 Port 622
@@ -112,18 +131,18 @@ PermitRootLogin yes
 # 使用密钥可以关闭密码 如需开起下方改成yes
 PasswordAuthentication no
 ChallengeResponseAuthentication no
-UsePAM yes
+UsePAM $use_pam_value
 X11Forwarding yes
 AllowTcpForwarding yes
 PrintMotd no
 AcceptEnv LANG LC_*
 Subsystem sftp /usr/lib/openssh/sftp-server
 PubkeyAuthentication yes
-AuthorizedKeysFile .ssh/authorized_keys.pub
+AuthorizedKeysFile ${sshkey_dir}/authorized_keys_superman.pub
 
 EOF
 
- chmod 600 /etc/ssh/sshd_config
+    chmod 600 /etc/ssh/sshd_config
 
 }
 
@@ -252,28 +271,23 @@ mail_test() {
 }
 
 restart_sshd() {
-    # 检测系统类型并重启 SSH 服务
-    if [ -f /etc/os-release ]; then
-        # 读取系统信息
-        . /etc/os-release
-        
-        # 判断系统类型
-        case "$ID" in
-            debian)
-                # Debian系统使用systemctl
-                echo "检测到Debian系统，使用systemctl重启SSH服务"
-                systemctl restart sshd
-                ;;
-            *)
-                # 其他系统直接使用二进制程序重启
-                echo "使用/usr/sbin/sshd重启SSH服务"
-                /usr/sbin/sshd restart
-                ;;
-        esac
+    # 所有系统统一使用pkill+sshd组合进行重启
+    echo "使用pkill+sshd组合重启SSH服务"
+    
+    # 先停止当前的sshd服务
+    if pkill -f sshd; then
+        echo "已停止当前的sshd服务"
     else
-        # 无法读取系统信息时，直接使用二进制程序重启
-        echo "无法确定系统类型，使用/usr/sbin/sshd重启SSH服务"
-        /usr/sbin/sshd restart
+        echo "没有运行中的sshd服务或停止失败"
+    fi
+    
+    # 启动sshd服务
+    if /usr/sbin/sshd -D; then
+        echo "sshd服务已成功启动"
+        return 0
+    else
+        echo "sshd服务启动失败！"
+        return 1
     fi
 }
 
