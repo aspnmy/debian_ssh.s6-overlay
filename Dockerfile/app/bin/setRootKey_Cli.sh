@@ -288,12 +288,14 @@ restart_sshd(){
                     echo "service命令不存在，尝试使用init.d脚本"
                     /etc/init.d/sshd restart && return 0
                 fi
-                
-                # 方法4: 尝试使用systemctl（某些Alpine版本可能安装了systemd）
-                if command -v systemctl &> /dev/null; then
-                    echo "init.d脚本不存在，尝试使用systemctl"
-                    systemctl restart sshd && return 0
+
+                # 方法4: 尝试直接使用/usr/sbin/sshd
+                if [ -f /usr/sbin/sshd]; then
+                    echo "service命令不存在，尝试使用/usr/sbin/sshd"
+                    /usr/sbin/sshd restart && return 0
                 fi
+                
+                
                 
                 echo "所有重启SSH服务的方法都失败了！"
                 return 1
