@@ -251,7 +251,7 @@ mail_test() {
     
 }
 
-restart_sshd(){
+restart_sshd() {
     # 检测系统类型并重启 SSH 服务
     if [ -f /etc/os-release ]; then
         # 读取系统信息
@@ -262,33 +262,18 @@ restart_sshd(){
             debian)
                 # Debian系统使用systemctl
                 echo "检测到Debian系统，使用systemctl重启SSH服务"
-                systemctl restart sshd || {
-                    echo "systemctl命令失败，尝试使用service命令"
-                    service ssh restart
-                }
-                ;; 
+                systemctl restart sshd
+                ;;
             *)
-                # 默认尝试多种方法
-                echo "未识别的系统类型，尝试重启SSH服务"
-                
-                if [ -f /usr/sbin/sshd]; then
-                    echo "service命令不存在，尝试使用/usr/sbin/sshd"
-                    /usr/sbin/sshd restart && return 0
-                fi
-                echo "所有重启SSH服务的方法都失败了！"
-                return 1
+                # 其他系统直接使用二进制程序重启
+                echo "使用/usr/sbin/sshd重启SSH服务"
+                /usr/sbin/sshd restart
                 ;;
         esac
     else
-        # 如果无法读取系统信息，尝试多种方法
-        echo "无法确定系统类型，尝试多种方法重启SSH服务"
-        
-                if [ -f /usr/sbin/sshd]; then
-                    echo "service命令不存在，尝试使用/usr/sbin/sshd"
-                    /usr/sbin/sshd restart && return 0
-                fi
-        echo "所有重启SSH服务的方法都失败了！"
-        return 1
+        # 无法读取系统信息时，直接使用二进制程序重启
+        echo "无法确定系统类型，使用/usr/sbin/sshd重启SSH服务"
+        /usr/sbin/sshd restart
     fi
 }
 
