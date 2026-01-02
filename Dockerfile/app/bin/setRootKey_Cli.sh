@@ -177,6 +177,7 @@ set_sshd_config_sshkey_superman(){
         fi
     fi
  cat <<EOF > $sshd_config_file
+# chmod 600 /etc/ssh/sshd_config 
 # Port 22 纯-sshkey登陆模式-password无法登陆
 # authorized_keys_superman 为超级用户公钥-对应的超级用户私钥是dev-ops-worker
 # authorized_keys_superman 默认每个虚拟机都会配置的文件
