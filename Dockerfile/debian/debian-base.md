@@ -1,0 +1,1 @@
+BASEIMAGE=dhi.io/debian-base:bookworm-debian12-dev
