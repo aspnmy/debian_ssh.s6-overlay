@@ -1,4 +1,4 @@
-#!bin/bash
+#!/bin/bash
 
 
 # 检查是否为 root 用户
@@ -126,6 +126,9 @@ get_sshkey()  {
 
     # 创建 .ssh 目录（如果不存在）
     mkdir -p "$KEY_DIR"
+    
+    # 创建 SSH 密钥下载目录（如果不存在）
+    mkdir -p "$DL_SSHKEY_dir"
 
 
     # 提示用户输入邮箱地址并验证
