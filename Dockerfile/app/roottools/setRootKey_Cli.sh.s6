@@ -11,6 +11,30 @@ sshd_config_dir="/etc/ssh/sshd_config"
 sshd_config_backdir="/etc/ssh/sshd_config_backup_aspnmy"
 sshkey_superman_pub="/root/.ssh/authorized_keys_superman.pub"
 DL_SSHKEY_dir="/aspnmy/wwwroot/ssh_key"
+ssh_us
+# ===================== 目录自动检测 + 创建 =====================
+# 提取需要检查的目录路径（只处理目录，不处理文件）
+check_and_create_dir() {
+    local dir_path="$1"
+    if [ ! -d "$dir_path" ]; then
+        echo "📂 目录不存在，正在创建：$dir_path"
+        mkdir -p "$dir_path"
+        
+        # 安全权限
+        if [[ "$dir_path" == "/root/.ssh" ]]; then
+            chmod 700 "$dir_path"
+        fi
+        if [[ "$dir_path" == "/aspnmy/wwwroot/ssh_key" ]]; then
+            chmod 755 "$dir_path"
+        fi
+    fi
+}
+
+# 检测并创建所有必需目录
+check_and_create_dir "/root/.ssh"
+check_and_create_dir "/etc/ssh"
+check_and_create_dir "$DL_SSHKEY_dir"
+# ==============================================================
 
 # -------------------函数定义-------------------
 
