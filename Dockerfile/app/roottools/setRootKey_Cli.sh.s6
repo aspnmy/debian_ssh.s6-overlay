@@ -243,6 +243,64 @@ restart_sshd(){
     fi
 }
 
+# mailto 模式：自动发送目录中的私钥文件给用户邮箱，然后删除文件
+send_keys_by_mail() {
+    ck_mail
+    
+    # 检查目录是否存在
+    if [ ! -d "$DL_SSHKEY_dir" ]; then
+        echo "❌ 目录不存在：$DL_SSHKEY_dir"
+        return 1
+    fi
+    
+    # 获取目录下的所有文件
+    files=$(find "$DL_SSHKEY_dir" -maxdepth 1 -type f)
+    
+    if [ -z "$files" ]; then
+        echo "✅ 没有待发送的密钥文件"
+        return 0
+    fi
+    
+    echo "📧 开始发送密钥文件..."
+    sent_count=0
+    failed_count=0
+    
+    while IFS= read -r file; do
+        if [ -f "$file" ]; then
+            # 从文件名中提取邮箱地址 (格式: 时间戳_邮箱地址)
+            filename=$(basename "$file")
+            user_email=$(echo "$filename" | sed 's/^[0-9]*_//')
+            
+            # 验证邮箱格式
+            if validate_email "$user_email"; then
+                echo "📤 正在发送给 $user_email ..."
+                
+                # 读取私钥内容并发送邮件
+                if cat "$file" | mail -s "SSH私钥文件 - 请妥善保管" "$user_email" 2>/dev/null; then
+                    echo "✅ 成功发送至 $user_email"
+                    # 删除已发送的文件
+                    rm -f "$file"
+                    ((sent_count++))
+                else
+                    echo "❌ 发送失败：$user_email"
+                    ((failed_count++))
+                fi
+            else
+                echo "⚠️  跳过无效的邮箱格式：$user_email"
+                ((failed_count++))
+            fi
+        fi
+    done <<< "$files"
+    
+    # 输出统计信息
+    echo ""
+    echo "=== 邮件发送统计 ==="
+    echo "✅ 成功发送：$sent_count 个"
+    echo "❌ 发送失败：$failed_count 个"
+    echo "🗂️  目录剩余文件数：$(find "$DL_SSHKEY_dir" -maxdepth 1 -type f | wc -l)"
+}
+
+
 set_hosts(){
 cat > /etc/hosts << EOF
 
@@ -327,12 +385,16 @@ main() {
         "set_hosts")
             set_hosts
             ;;
+        "mailto")
+            send_keys_by_mail
+            ;;
         *)
             echo "无效的选择。请使用以下格式运行脚本："
             echo "setRootKey_Cli 'superman'"
             echo "setRootKey_Cli 'usrkey'"
             echo "setRootKey_Cli 'sshd'" 
-            echo "setRootKey_Cli 'set_hosts'"   
+            echo "setRootKey_Cli 'set_hosts'"
+            echo "setRootKey_Cli 'mailto'"   
             exit 1
             ;;
     esac
