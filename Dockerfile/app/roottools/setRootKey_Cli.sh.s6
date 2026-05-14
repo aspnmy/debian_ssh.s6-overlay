@@ -183,9 +183,19 @@ validate_email() {
 }
 
 ck_mail(){
+    local need_install=0
     if ! command -v sendmail &> /dev/null; then
-        echo "sendmail 组件未安装，正在安装 sendmail 包..."
-        apt-get update && apt-get install -y sendmail
+        echo "sendmail 组件未安装。"
+        need_install=1
+    fi
+    if ! command -v mail &> /dev/null; then
+        echo "mail 命令未安装。"
+        need_install=1
+    fi
+
+    if [ "$need_install" -eq 1 ]; then
+        echo "正在安装邮件发送依赖..."
+        apt-get update && apt-get install -y sendmail mailutils
     fi
 }
     
