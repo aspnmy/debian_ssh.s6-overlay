@@ -42,3 +42,7 @@ Dockerfile/app/s6-overlay/tmp/
 **/scan_report/
 .history/
 **/tmp
+
+# Ignore generated build artifacts
+Dockerfile/app/roottools/setRootKey_Cli
+Dockerfile/app/roottools/setRootKey_Cli.sh.s6.x.c
