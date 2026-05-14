@@ -2,3 +2,5 @@
 **/.git
 **/node_modules
 **/tmp
+**/.history
+**/oci_archive_temp

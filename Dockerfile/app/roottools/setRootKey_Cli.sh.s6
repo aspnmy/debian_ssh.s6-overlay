@@ -1,4 +1,4 @@
-#!bin/bash
+#!/bin/bash
 
 
 # 检查是否为 root 用户
@@ -11,6 +11,30 @@ sshd_config_dir="/etc/ssh/sshd_config"
 sshd_config_backdir="/etc/ssh/sshd_config_backup_aspnmy"
 sshkey_superman_pub="/root/.ssh/authorized_keys_superman.pub"
 DL_SSHKEY_dir="/aspnmy/wwwroot/ssh_key"
+ssh_us
+# ===================== 目录自动检测 + 创建 =====================
+# 提取需要检查的目录路径（只处理目录，不处理文件）
+check_and_create_dir() {
+    local dir_path="$1"
+    if [ ! -d "$dir_path" ]; then
+        echo "📂 目录不存在，正在创建：$dir_path"
+        mkdir -p "$dir_path"
+        
+        # 安全权限
+        if [[ "$dir_path" == "/root/.ssh" ]]; then
+            chmod 700 "$dir_path"
+        fi
+        if [[ "$dir_path" == "/aspnmy/wwwroot/ssh_key" ]]; then
+            chmod 755 "$dir_path"
+        fi
+    fi
+}
+
+# 检测并创建所有必需目录
+check_and_create_dir "/root/.ssh"
+check_and_create_dir "/etc/ssh"
+check_and_create_dir "$DL_SSHKEY_dir"
+# ==============================================================
 
 # -------------------函数定义-------------------
 
@@ -126,6 +150,9 @@ get_sshkey()  {
 
     # 创建 .ssh 目录（如果不存在）
     mkdir -p "$KEY_DIR"
+    
+    # 创建 SSH 密钥下载目录（如果不存在）
+    mkdir -p "$DL_SSHKEY_dir"
 
 
     # 提示用户输入邮箱地址并验证
@@ -180,9 +207,19 @@ validate_email() {
 }
 
 ck_mail(){
+    local need_install=0
     if ! command -v sendmail &> /dev/null; then
-        echo "sendmail 组件未安装，正在安装 sendmail 包..."
-        apt-get update && apt-get install -y sendmail
+        echo "sendmail 组件未安装。"
+        need_install=1
+    fi
+    if ! command -v mail &> /dev/null; then
+        echo "mail 命令未安装。"
+        need_install=1
+    fi
+
+    if [ "$need_install" -eq 1 ]; then
+        echo "正在安装邮件发送依赖..."
+        apt-get update && apt-get install -y sendmail mailutils
     fi
 }
     
@@ -228,9 +265,75 @@ mail_test() {
 }
 
 restart_sshd(){
-    # 重启 SSH 服务
-     systemctl restart sshd
+    # 在s6容器中重启SSH服务
+    if [ -f "/etc/s6-overlay/s6-rc.d/sshd/run" ]; then
+        echo "使用s6-svc重启SSH服务..."
+        # s6-svc -r 重启服务
+        s6-svc -r /run/service/sshd
+    else
+        echo "使用传统方式重启SSH服务..."
+        # 传统方式重启
+        /usr/sbin/sshd -t && pkill -HUP sshd
+    fi
 }
+
+# mailto 模式：自动发送目录中的私钥文件给用户邮箱，然后删除文件
+send_keys_by_mail() {
+    ck_mail
+    
+    # 检查目录是否存在
+    if [ ! -d "$DL_SSHKEY_dir" ]; then
+        echo "❌ 目录不存在：$DL_SSHKEY_dir"
+        return 1
+    fi
+    
+    # 获取目录下的所有文件
+    files=$(find "$DL_SSHKEY_dir" -maxdepth 1 -type f)
+    
+    if [ -z "$files" ]; then
+        echo "✅ 没有待发送的密钥文件"
+        return 0
+    fi
+    
+    echo "📧 开始发送密钥文件..."
+    sent_count=0
+    failed_count=0
+    
+    while IFS= read -r file; do
+        if [ -f "$file" ]; then
+            # 从文件名中提取邮箱地址 (格式: 时间戳_邮箱地址)
+            filename=$(basename "$file")
+            user_email=$(echo "$filename" | sed 's/^[0-9]*_//')
+            
+            # 验证邮箱格式
+            if validate_email "$user_email"; then
+                echo "📤 正在发送给 $user_email ..."
+                
+                # 读取私钥内容并发送邮件
+                if cat "$file" | mail -s "SSH私钥文件 - 请妥善保管" "$user_email" 2>/dev/null; then
+                    echo "✅ 成功发送至 $user_email"
+                    # 删除已发送的文件
+                    rm -f "$file"
+                    ((sent_count++))
+                else
+                    echo "❌ 发送失败：$user_email"
+                    ((failed_count++))
+                fi
+            else
+                echo "⚠️  跳过无效的邮箱格式：$user_email"
+                ((failed_count++))
+            fi
+        fi
+    done <<< "$files"
+    
+    # 输出统计信息
+    echo ""
+    echo "=== 邮件发送统计 ==="
+    echo "✅ 成功发送：$sent_count 个"
+    echo "❌ 发送失败：$failed_count 个"
+    echo "🗂️  目录剩余文件数：$(find "$DL_SSHKEY_dir" -maxdepth 1 -type f | wc -l)"
+}
+
 
 set_hosts(){
 cat > /etc/hosts << EOF
@@ -316,12 +419,16 @@ main() {
         "set_hosts")
             set_hosts
             ;;
+        "mailto")
+            send_keys_by_mail
+            ;;
         *)
             echo "无效的选择。请使用以下格式运行脚本："
             echo "setRootKey_Cli 'superman'"
             echo "setRootKey_Cli 'usrkey'"
             echo "setRootKey_Cli 'sshd'" 
-            echo "setRootKey_Cli 'set_hosts'"   
+            echo "setRootKey_Cli 'set_hosts'"
+            echo "setRootKey_Cli 'mailto'"   
             exit 1
             ;;
     esac
