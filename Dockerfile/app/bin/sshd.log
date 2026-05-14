@@ -1,2 +1,0 @@
-#!/usr/bin/execlineb -P
-s6-log -b -d /var/log/sshd

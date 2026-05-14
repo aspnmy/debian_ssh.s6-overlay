@@ -42,21 +42,3 @@ Dockerfile/app/s6-overlay/tmp/
 **/scan_report/
 .history/
 **/tmp
-
-# Legacy/Unused scripts and tools
-Dockerfile/app/dos2unix.sh
-Dockerfile/app/sources.list
-Dockerfile/app/bin/gitBestHostsMonitor.sh
-Dockerfile/app/bin/install_docker.sh
-Dockerfile/app/bin/install_podman_debian13.sh
-Dockerfile/app/bin/installdocker_debian13.sh
-Dockerfile/app/bin/registries.conf
-Dockerfile/app/bin/setRootKey_Cli.sh
-Dockerfile/app/bin/sources.list
-Dockerfile/app/bin/sshd.finish
-Dockerfile/app/bin/sshd.log
-Dockerfile/app/bin/sshd.run
-Dockerfile/app/bin/sshd.type
-Dockerfile/app/bin/sshdInt.sh
-Dockerfile/app/bin/sshd_config
-Dockerfile/app/roottools/setRootKey_Cli.sh
