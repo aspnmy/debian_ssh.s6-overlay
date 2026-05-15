@@ -29,9 +29,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libibverbs1 ibverbs-utils rdmacm-utils infiniband-diags perftest \
     iproute2 kmod hostname dnsutils && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-COPY app/rdma/check_rdma_softroce /aspnmy/bin/
+ADD app/rdma /aspnmy/bin/
 RUN chmod +x /aspnmy/bin/check_rdma_softroce
-
+RUN chmod +x /aspnmy/bin/rdma_manage
 WORKDIR /aspnmy/bin
 EOF
 

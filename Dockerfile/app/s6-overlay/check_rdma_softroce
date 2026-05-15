@@ -1,0 +1,63 @@
+#!/bin/bash
+set -eo pipefail
+
+# 无颜色编码，避免乱码
+RED=""
+GREEN=""
+NC=""
+
+success() {
+    echo "[✅ SUCCESS] $1"
+}
+
+error() {
+    echo "[❌ FAILED] $1"
+    exit 1
+}
+
+cleanup() {
+    if [ -n "$SERVER_PID" ]; then
+        kill $SERVER_PID 2>/dev/null || true
+        wait $SERVER_PID 2>/dev/null || true
+    fi
+}
+trap cleanup EXIT
+
+echo -e "\n============================================="
+echo -e " 🚀 RDMA + Soft-RoCE 真实连通性测试"
+echo -e "=============================================\n"
+
+# 1. 检查设备节点
+echo -e "\n[1/5] 检查 RDMA 设备节点..."
+[ -d "/dev/infiniband" ] || error "未找到 RDMA 设备"
+success "RDMA 设备已透传"
+
+# 2. 检查驱动
+echo -e "\n[2/5] 检查 RDMA 驱动..."
+ibv_devinfo >/dev/null 2>&1 || error "RDMA 驱动异常"
+success "RDMA 驱动正常"
+
+# 3. 检查 Soft-RoCE
+echo -e "\n[3/5] 检查 Soft-RoCE 设备..."
+rdma link | grep -q rxe0 || error "未找到 rxe0 设备"
+success "Soft-RoCE 已就绪"
+
+# 4. 启动 RDMA 服务器 (0.0.0.0)
+echo -e "\n[4/5] 启动 RDMA 服务器 (0.0.0.0)..."
+ib_write_bw -d rdma_rxe -b -t 128 -n 100 -s 4096 >/dev/null 2>&1 &
+SERVER_PID=$!
+sleep 2
+ps -p $SERVER_PID >/dev/null 2>&1 || error "服务器启动失败"
+success "RDMA 服务器已启动（0.0.0.0）"
+
+# 5. 启动客户端测试（真实连接）
+echo -e "\n[5/5] 启动客户端连接本机..."
+if ib_write_bw -d rdma_rxe 127.0.0.1 -b -t 128 -n 100 -s 4096 >/dev/null 2>&1; then
+    success "客户端连接成功，RDMA 通信正常"
+else
+    error "客户端连接失败"
+fi
+
+echo -e "\n============================================="
+success " 🎉 全部真实测试通过！RDMA 功能正常！"
+echo -e "=============================================\n"
