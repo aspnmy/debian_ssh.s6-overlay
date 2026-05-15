@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  rdma-node1:
+    image: ghcr.io/aspnmy/debian_ssh.s6-overlay:rdma-baseimage-s6-overlay_v3.2.3.0_2026051500-zstd-lts-zstd-lts-oci-latest
+    container_name: ${port01}-rdma-node1
+    hostname: rdma-node-1
+    privileged: true
+    ports:
+      - "${port01}:622"
+    volumes:
+      - /lib/modules:/lib/modules:ro
+      - /dev/infiniband:/dev/infiniband
+    tty: true
+    restart: unless-stopped
+
+  rdma-node2:
+    image: ghcr.io/aspnmy/debian_ssh.s6-overlay:rdma-baseimage-s6-overlay_v3.2.3.0_2026051500-zstd-lts-zstd-lts-oci-latest
+    container_name: ${port02}-rdma-node2
+    hostname: rdma-node-2
+    privileged: true
+    ports:
+      - "${port02}:622"
+    volumes:
+      - /lib/modules:/lib/modules:ro
+      - /dev/infiniband:/dev/infiniband
+    tty: true
+    restart: unless-stopped

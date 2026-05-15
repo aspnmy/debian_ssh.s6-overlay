@@ -1,0 +1,70 @@
+#!/bin/bash
+set -euo pipefail
+
+root_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+tmp_dir="${root_dir}/tmp"
+mkdir -p "${tmp_dir}"
+
+DH="docker.io"
+GHCR="ghcr.io"
+
+user_repo_file="${root_dir}/.user_repo"
+[ ! -f "$user_repo_file" ] && exit 1
+USER_REPO=$(cat "$user_repo_file" | tr -d '\n' | tr -d ' ')
+
+base_image_file="${root_dir}/debian_ssh.s6.md"
+BASE_IMAGE=$(grep BASEIMAGE "$base_image_file" | cut -d'=' -f2)
+BASE_TAG=$(echo "$BASE_IMAGE" | awk -F: '{print $2}')
+VERSION_TAG="rdma-${BASE_TAG}"
+
+build() {
+    # 只安装rdma相关套件,并且添加检查脚本,不增加功能配置,保持镜像轻量化
+    echo -e "\n=== 构建镜像 ==="
+
+    cat > "${root_dir}/rdma.Dockerfile" <<EOF
+FROM ${BASE_IMAGE}
+ENV DEBIAN_FRONTEND noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libibverbs1 ibverbs-utils rdmacm-utils infiniband-diags perftest \
+    iproute2 kmod hostname dnsutils && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+COPY app/rdma/check_rdma_softroce /aspnmy/bin/
+RUN chmod +x /aspnmy/bin/check_rdma_softroce
+
+WORKDIR /aspnmy/bin
+EOF
+
+    docker build --no-cache -f "${root_dir}/rdma.Dockerfile" -t "${VERSION_TAG}" ..
+    rm -f "${root_dir}/rdma.Dockerfile"
+}
+
+package_zstd() {
+    echo -e "\n=== zstd 压缩 ==="
+    TMP_TAR="${tmp_dir}/img.tar"
+    docker save "${VERSION_TAG}" -o "${TMP_TAR}"
+    zstd --fast=1 --rm "${TMP_TAR}"
+    docker load -i "${TMP_TAR}.zst"
+    rm -rf "${tmp_dir}"
+}
+
+push_all() {
+    IMAGE_FULL="${VERSION_TAG}-zstd-lts-oci-latest"
+
+    echo -e "\n=== 推送到 Docker Hub ==="
+    docker tag "${VERSION_TAG}" "${DH}/${USER_REPO}:${IMAGE_FULL}"
+    docker push "${DH}/${USER_REPO}:${IMAGE_FULL}"
+
+    echo -e "\n=== 推送到 GitHub CR ==="
+    docker tag "${VERSION_TAG}" "${GHCR}/${USER_REPO}:${IMAGE_FULL}"
+    docker push "${GHCR}/${USER_REPO}:${IMAGE_FULL}"
+}
+
+main() {
+    build
+    package_zstd
+    push_all
+    echo -e "\n🎉 构建 + 推送 全部成功！"
+}
+
+main

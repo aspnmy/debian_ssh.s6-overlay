@@ -1,0 +1,1 @@
+BASEIMAGE=ghcr.io/aspnmy/debian_ssh.s6-overlay:baseimage-s6-overlay_v3.2.3.0_2026051500-zstd-lts
