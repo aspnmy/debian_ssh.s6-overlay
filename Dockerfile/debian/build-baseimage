@@ -2,183 +2,153 @@
 set -euo pipefail
 
 # ==========================
-# 统一绝对路径
+# debian_ssh.s6-overlay build script
+# 多阶段构建 + buildx 多架构支持
 # ==========================
-root_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
-tool_dir="${root_dir}
+root_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 tmp_dir="${root_dir}/tmp"
 mkdir -p "$tmp_dir"
 
+S6_VER="${S6_OVERLAY_VERSION:-3.2.3.0}"
 DEVROM="devrom.org"
 
-# 读取s6-overlay版本号
-S6_OVERLAY_VERSION=$(curl -sL https://raw.githubusercontent.com/just-containers/s6-overlay/refs/heads/master/conf/defaults.mk | grep '^VERSION' | awk '{print $3}')
-if [ -z "$S6_OVERLAY_VERSION" ]; then
-    S6_OVERLAY_VERSION="3.2.3.0"
-fi
-
-# 读取基础镜像地址
-if [ -f "debian-base.md" ]; then
-    BASEIMAGE=$(cat ${root_dir}/debian-base.md | grep BASEIMAGE | cut -d'=' -f2)
+# 读取基础镜像
+if [ -f "${root_dir}/debian-base.md" ]; then
+    BASEIMAGE=$(grep BASEIMAGE "${root_dir}/debian-base.md" | cut -d= -f2)
 else
-    echo "Error: debian-base.md file not found"
+    echo "Error: debian-base.md not found"
     exit 1
 fi
 
-# 构建参数
+# 读取用户仓库
+USER_REPO=$(cat "${root_dir}/.user_repo" | tr -d '\n ')
+[ -z "$USER_REPO" ] && { echo "Error: .user_repo empty"; exit 1; }
+
 timeBuild=$(date +"%Y%m%d%H")
-stableVer="baseimage-s6-overlay_v${S6_OVERLAY_VERSION}_${timeBuild}
+stableVer="baseimage-s6-overlay_v${S6_VER}_${timeBuild}"
+IMGE_NAME="${USER_REPO}:${stableVer}"
+IMAGE_ZSTD="${IMGE_NAME}-zstd-lts"
 
 # ==========================
-# 读取用户仓库配置
+# 检测 buildx 可用性
 # ==========================
-user_repo_file="${root_dir}/.user_repo"
-if [ ! -f "${user_repo_file}" ]; then
-    echo -e "\n❌ 错误：用户仓库配置文件不存在！"
-    echo -e "📁 请创建文件： ${user_repo_file}
-    echo -e "✏️ 内容示例：aspnmy/debian-base\n"
-    exit 1
-fi
-USER_REPO_NAME=$(cat "${user_repo_file}" | tr -d '\n' | tr -d ' ')
-if [ -z "${USER_REPO_NAME}" ]; then
-    echo -e "\n❌ 错误：.user_repo 文件内容为空！\n"
-    exit 1
-fi
-
-IMGE_NAME="${USER_REPO_NAME}:${stableVer}
-IMAGE_ZSTD_FULL="${IMGE_NAME}-zstd-lts"
+use_buildx() {
+    docker buildx version >/dev/null 2>&1 && return 0 || return 1
+}
 
 # ==========================
-# 构建标准镜像
+# 构建
 # ==========================
-build_s6_baseimage() {
-    echo -e "\n=== 构建标准镜像 ==="
-    cat <<EOF > "s6_baseimage.Dockerfile"
+build_image() {
+    local dockerfile="${tmp_dir}/Dockerfile"
+    cat > "$dockerfile" << 'DOCKERFILE'
+# syntax=docker/dockerfile:1
+FROM ${BASEIMAGE} AS s6-downloader
+RUN apt-get update && apt-get install -y --no-install-recommends xz-utils curl ca-certificates \
+    && mkdir -p /tmp/s6 \
+    && curl -fsSL https://github.com/just-containers/s6-overlay/releases/download/v${S6_VER}/s6-overlay-noarch.tar.xz -o /tmp/s6-noarch.tar.xz \
+    && curl -fsSL https://github.com/just-containers/s6-overlay/releases/download/v${S6_VER}/s6-overlay-$(uname -m | sed 's/aarch64/aarch64/;s/x86_64/x86_64/').tar.xz -o /tmp/s6-arch.tar.xz \
+    && tar -C /tmp/s6 -Jxpf /tmp/s6-noarch.tar.xz \
+    && tar -C /tmp/s6 -Jxpf /tmp/s6-arch.tar.xz \
+    && rm -f /tmp/s6-noarch.tar.xz /tmp/s6-arch.tar.xz
+
+# Runtime stage: minimal Debian + SSH + s6-overlay
 FROM ${BASEIMAGE}
-FROM ${BASEIMAGE} AS builder
-
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    xz-utils \
-    curl
+# Install only openssh-server, clean up
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openssh-server \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-RUN mkdir -p /tmp/s6-overlay \
-    && curl -fsSL https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz -o /tmp/s6-overlay-noarch.tar.xz \
-    && curl -fsSL https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-x86_64.tar.xz -o /tmp/s6-overlay-x86_64.tar.xz \
-    && tar -C /tmp/s6-overlay -Jxpf /tmp/s6-overlay-noarch.tar.xz \
-    && tar -C /tmp/s6-overlay -Jxpf /tmp/s6-overlay-x86_64.tar.xz
+# Fix container warnings early
+COPY app/roottools/fix-warnings.sh /tmp/
+RUN bash /tmp/fix-warnings.sh && rm /tmp/fix-warnings.sh
 
-FROM ${BASEIMAGE}
+# Copy s6-overlay
+COPY --from=s6-downloader /tmp/s6/ /
 
-ENV DEBIAN_FRONTEND=noninteractive
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    openssh-server \
-    && mkdir -p /var/run/sshd \
-    && mkdir -p /aspnmy/bin \
-    && mkdir -p /aspnmy/wwwroot/ssh_key \
-    && chmod 700 /var/run/sshd \
-    && chown root:root /var/run/sshd \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY --from=builder /tmp/s6-overlay/ /
-
-COPY /app/roottools/setRootKey_Cli.sh.s6 /aspnmy/bin/
+# Copy tools
+COPY app/roottools/setRootKey_Cli.sh.s6 /aspnmy/bin/
 RUN chmod +x /aspnmy/bin/setRootKey_Cli.sh.s6
 
+# Timezone
 RUN rm -f /etc/localtime \
     && ln -s /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
-    && echo "Asia/Shanghai" | tee /etc/timezone
+    && echo "Asia/Shanghai" > /etc/timezone
 
-# 修复容器警告 (nologin + policy-rc.d)
-COPY /app/roottools/fix-warnings.sh /aspnmy/bin/
-RUN chmod +x /aspnmy/bin/fix-warnings.sh && bash /aspnmy/bin/fix-warnings.sh
-RUN mkdir -p /root/.ssh \
-    && chmod 700 /root/.ssh \
-    && mkdir -p /run/sshd \
+# SSH directories
+RUN mkdir -p /root/.ssh /run/sshd /var/run/sshd /aspnmy/bin /aspnmy/wwwroot/ssh_key \
+    && chmod 700 /root/.ssh /var/run/sshd \
     && chmod 755 /run/sshd
 
+# Run SSH key setup
 RUN bash /aspnmy/bin/setRootKey_Cli.sh.s6 superman
 
-RUN mkdir -p /etc/s6-overlay/s6-rc.d/sshd \
-    && mkdir -p /etc/s6-overlay/s6-rc.d/sshd/dependencies.d \
-    && mkdir -p /etc/s6-overlay/s6-rc.d/sshd/log \
-    && mkdir -p /var/log/sshd \
+# Configure s6-overlay for sshd
+RUN mkdir -p /etc/s6-overlay/s6-rc.d/sshd/dependencies.d /etc/s6-overlay/s6-rc.d/sshd/log /var/log/sshd \
     && touch /etc/s6-overlay/s6-rc.d/user/contents.d/sshd \
     && touch /etc/s6-overlay/s6-rc.d/sshd/dependencies.d/base \
     && echo "longrun" > /etc/s6-overlay/s6-rc.d/sshd/type \
-    && printf "#!/bin/sh\n/usr/sbin/sshd -D\n" > /etc/s6-overlay/s6-rc.d/sshd/run \
+    && printf '#!/bin/sh\n/usr/sbin/sshd -D\n' > /etc/s6-overlay/s6-rc.d/sshd/run \
     && chmod +x /etc/s6-overlay/s6-rc.d/sshd/run \
-    && printf "#!/bin/sh\nexec s6-log -b -- n20 s1000000 /var/log/sshd\n" > /etc/s6-overlay/s6-rc.d/sshd/log/run \
+    && printf '#!/bin/sh\nexec s6-log -b -- n20 s1000000 /var/log/sshd\n' > /etc/s6-overlay/s6-rc.d/sshd/log/run \
     && chmod +x /etc/s6-overlay/s6-rc.d/sshd/log/run
 
+HEALTHCHECK --interval=30s --timeout=5s CMD pgrep sshd || exit 1
 EXPOSE 622
 ENTRYPOINT ["/init"]
-EOF
+DOCKERFILE
 
-    docker build --no-cache -f "s6_baseimage.Dockerfile" -t "${IMGE_NAME}" ..
-    rm -rf "s6_baseimage.Dockerfile"
-}
+    export BASEIMAGE S6_VER ; envsubst < "$dockerfile" > "${dockerfile}.rendered"
+    mv "${dockerfile}.rendered" "$dockerfile"
 
-# ==========================
-# ✅ 集成你的最终版 zstd 压缩
-# ==========================
-build_oci_zstd_image() {
-    SOURCE_IMAGE="$IMGE_NAME"
-    ZSTD_IMAGE="$IMAGE_ZSTD_FULL"
-    TMP_FILE="$(mktemp -p "$tmp_dir").tar.zst"
-
-    # 检查依赖
-    if ! command -v zstd &> /dev/null; then
-        echo "安装 zstd..."
-        apt update && apt install -y zstd -y
+    if use_buildx; then
+        echo "=== Buildx multi-arch ==="
+        docker buildx build --platform linux/amd64,linux/arm64 \
+            --tag "${IMGE_NAME}" \
+            --load \
+            -f "$dockerfile" ..
+    else
+        echo "=== Legacy build ==="
+        docker build --no-cache -f "$dockerfile" -t "${IMGE_NAME}" ..
     fi
-
-    echo -e "\n========================================"
-    echo "🔹 本地压缩镜像为 zstd"
-    echo "🔹 源镜像：$SOURCE_IMAGE"
-    echo "🔹 输出镜像：$ZSTD_IMAGE"
-    echo -e "========================================"
-
-    # 导出并压缩
-    echo "🚀 导出并压缩中..."
-    docker save "$SOURCE_IMAGE" | zstd -T0 -15 -f -o "$TMP_FILE"
-
-    # 导入
-    echo "✅ 导入压缩镜像..."
-    docker load -i "$TMP_FILE"
-
-    # 打标签
-    docker tag "$SOURCE_IMAGE" "$ZSTD_IMAGE"
-
-    # 清理
-    rm -rf "$tmp_dir"/*
-
-    echo -e "\n🎉 zstd 镜像构建完成！"
-    echo "👉 $ZSTD_IMAGE"
+    rm -f "$dockerfile"
 }
 
 # ==========================
-# 推送所有镜像
+# zstd 压缩
 # ==========================
-push_s6_baseimage() {
-    echo -e "\n=== 推送企业仓库 ==="
-    docker tag "${IMGE_NAME}" "${DEVROM}/aspnmy/debian_ssh_s6-overlay_baseimage:${stableVer#baseimage-s6-overlay_v}"}
-    docker push "${DEVROM}/aspnmy/debian_ssh_s6-overlay_baseimage:${stableVer#baseimage-s6-overlay_v}"}
-    docker tag "${IMAGE_ZSTD}" "${DEVROM}/aspnmy/debian_ssh_s6-overlay_baseimage:${stableVer#baseimage-s6-overlay_v}-zstd"}
-    docker push "${DEVROM}/aspnmy/debian_ssh_s6-overlay_baseimage:${stableVer#baseimage-s6-overlay_v}-zstd"}
-
-    
+package_zstd() {
+    local tar_file="${tmp_dir}/img.tar"
+    docker save "${IMGE_NAME}" -o "$tar_file"
+    zstd --fast=1 --rm "$tar_file"
+    docker load -i "${tar_file}.zst"
+    docker tag "${IMGE_NAME}" "${IMAGE_ZSTD}"
+    rm -f "${tmp_dir}/img.tar.zst"
 }
 
 # ==========================
-# 主流程
+# 推送 devrom.org
+# ==========================
+push_devrom() {
+    local ver_tag="${stableVer#baseimage-s6-overlay_v}"
+    echo "=== Push devrom.org ==="
+    docker tag "${IMGE_NAME}" "${DEVROM}/aspnmy/debian_ssh_s6-overlay_baseimage:${ver_tag}"
+    docker push "${DEVROM}/aspnmy/debian_ssh_s6-overlay_baseimage:${ver_tag}"
+    docker tag "${IMAGE_ZSTD}" "${DEVROM}/aspnmy/debian_ssh_s6-overlay_baseimage:${ver_tag}-zstd"
+    docker push "${DEVROM}/aspnmy/debian_ssh_s6-overlay_baseimage:${ver_tag}-zstd"
+}
+
+# ==========================
+# main
 # ==========================
 main() {
-    build_s6_baseimage       # 1. 构建标准镜像
-    build_oci_zstd_image     # 2. 自动压缩成 zstd
-    push_s6_baseimage        # 3. 推送两个版本
+    build_image
+    package_zstd
+    push_devrom
+    echo "Done: ${DEVROM}/aspnmy/debian_ssh_s6-overlay_baseimage:${stableVer#baseimage-s6-overlay_v}"
 }
 
 main
