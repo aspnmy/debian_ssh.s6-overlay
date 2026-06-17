@@ -210,9 +210,9 @@ restart_sshd(){
         echo "使用s6-svc重启SSH服务..."
         # s6-overlay v3: 通过 s6-rc 或 /run/s6-rc/servicedirs/ 访问
         if [ -d "/run/s6-rc/servicedirs/sshd" ]; then
-            s6-svc -r /run/s6-rc/servicedirs/sshd
+            /command/s6-svc -r /run/s6-rc/servicedirs/sshd
         elif [ -d "/run/service/sshd" ]; then
-            s6-svc -r /run/service/sshd
+            /command/s6-svc -r /run/service/sshd
         else
             echo "⚠ s6 service dir not found, falling back to traditional restart"
             /usr/sbin/sshd -t && pkill -HUP sshd

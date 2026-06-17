@@ -56,22 +56,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends xz-utils curl c
 FROM ${BASEIMAGE}
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install only openssh-server, clean up
+# Install only openssh-server netcat-openbsd, clean up
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends openssh-server \
+    && apt-get install -y --no-install-recommends openssh-server netcat-openbsd \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Fix container warnings early
-COPY app/roottools/fix-warnings.sh /tmp/
-RUN bash /tmp/fix-warnings.sh && rm /tmp/fix-warnings.sh
+COPY app/roottools/fix-warnings.sh /aspnmy/bin/
+RUN bash /aspnmy/bin/fix-warnings.sh
 
 # Copy s6-overlay
 COPY --from=s6-downloader /tmp/s6/ /
 
 # Copy tools
 COPY app/roottools/setRootKey_Cli.sh.s6 /aspnmy/bin/
+COPY app/roottools/mini-key-server.sh /aspnmy/bin/
 RUN chmod +x /aspnmy/bin/setRootKey_Cli.sh.s6
+RUN chmod +x /aspnmy/bin/mini-key-server.sh
 
 # Timezone
 RUN rm -f /etc/localtime \
@@ -97,6 +99,8 @@ RUN mkdir -p /etc/s6-overlay/s6-rc.d/sshd/dependencies.d /etc/s6-overlay/s6-rc.d
     && chmod +x /etc/s6-overlay/s6-rc.d/sshd/log/run
 
 HEALTHCHECK --interval=30s --timeout=5s CMD pgrep sshd || exit 1
+EXPOSE 25
+EXPOSE 8880
 EXPOSE 622
 ENTRYPOINT ["/init"]
 DOCKERFILE
