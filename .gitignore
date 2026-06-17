@@ -44,7 +44,5 @@ Dockerfile/app/s6-overlay/tmp/
 **/tmp
 
 # Ignore generated build artifacts
-Dockerfile/app/roottools/setRootKey_Cli
-Dockerfile/app/roottools/setRootKey_Cli.sh.s6.x.c
 
 **/oci_archive_temp/**

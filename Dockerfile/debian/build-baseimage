@@ -5,12 +5,11 @@ set -euo pipefail
 # 统一绝对路径
 # ==========================
 root_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
-tool_dir="${root_dir}"
+tool_dir="${root_dir}
 tmp_dir="${root_dir}/tmp"
 mkdir -p "$tmp_dir"
 
-DH="docker.io"
-GHCR="ghcr.io"
+DEVROM="devrom.org"
 
 # 读取s6-overlay版本号
 S6_OVERLAY_VERSION=$(curl -sL https://raw.githubusercontent.com/just-containers/s6-overlay/refs/heads/master/conf/defaults.mk | grep '^VERSION' | awk '{print $3}')
@@ -28,7 +27,7 @@ fi
 
 # 构建参数
 timeBuild=$(date +"%Y%m%d%H")
-stableVer="baseimage-s6-overlay_v${S6_OVERLAY_VERSION}_${timeBuild}"
+stableVer="baseimage-s6-overlay_v${S6_OVERLAY_VERSION}_${timeBuild}
 
 # ==========================
 # 读取用户仓库配置
@@ -36,7 +35,7 @@ stableVer="baseimage-s6-overlay_v${S6_OVERLAY_VERSION}_${timeBuild}"
 user_repo_file="${root_dir}/.user_repo"
 if [ ! -f "${user_repo_file}" ]; then
     echo -e "\n❌ 错误：用户仓库配置文件不存在！"
-    echo -e "📁 请创建文件： ${user_repo_file}"
+    echo -e "📁 请创建文件： ${user_repo_file}
     echo -e "✏️ 内容示例：aspnmy/debian-base\n"
     exit 1
 fi
@@ -46,7 +45,7 @@ if [ -z "${USER_REPO_NAME}" ]; then
     exit 1
 fi
 
-IMGE_NAME="${USER_REPO_NAME}:${stableVer}"
+IMGE_NAME="${USER_REPO_NAME}:${stableVer}
 IMAGE_ZSTD_FULL="${IMGE_NAME}-zstd-lts"
 
 # ==========================
@@ -85,19 +84,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=builder /tmp/s6-overlay/ /
 
-COPY /app/roottools/build/setRootKey_Cli /aspnmy/bin/
-RUN chmod +x /aspnmy/bin/setRootKey_Cli
+COPY /app/roottools/setRootKey_Cli.sh.s6 /aspnmy/bin/
+RUN chmod +x /aspnmy/bin/setRootKey_Cli.sh.s6
 
 RUN rm -f /etc/localtime \
     && ln -s /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
     && echo "Asia/Shanghai" | tee /etc/timezone
 
+# 修复容器警告 (nologin + policy-rc.d)
+COPY /app/roottools/fix-warnings.sh /aspnmy/bin/
+RUN chmod +x /aspnmy/bin/fix-warnings.sh && bash /aspnmy/bin/fix-warnings.sh
 RUN mkdir -p /root/.ssh \
     && chmod 700 /root/.ssh \
     && mkdir -p /run/sshd \
     && chmod 755 /run/sshd
 
-RUN /aspnmy/bin/setRootKey_Cli superman
+RUN bash /aspnmy/bin/setRootKey_Cli.sh.s6 superman
 
 RUN mkdir -p /etc/s6-overlay/s6-rc.d/sshd \
     && mkdir -p /etc/s6-overlay/s6-rc.d/sshd/dependencies.d \
@@ -161,22 +163,13 @@ build_oci_zstd_image() {
 # 推送所有镜像
 # ==========================
 push_s6_baseimage() {
-    echo -e "\n=== 推送标准镜像 ==="
-    docker tag "${IMGE_NAME}" "${DH}/${IMGE_NAME}-lts"
-    docker tag "${IMGE_NAME}" "${GHCR}/${IMGE_NAME}-lts"
-    docker push "${DH}/${IMGE_NAME}-lts"
-    docker push "${GHCR}/${IMGE_NAME}-lts"
+    echo -e "\n=== 推送企业仓库 ==="
+    docker tag "${IMGE_NAME}" "${DEVROM}/aspnmy/debian_ssh_s6-overlay_baseimage:${stableVer#baseimage-s6-overlay_v}"}
+    docker push "${DEVROM}/aspnmy/debian_ssh_s6-overlay_baseimage:${stableVer#baseimage-s6-overlay_v}"}
+    docker tag "${IMAGE_ZSTD}" "${DEVROM}/aspnmy/debian_ssh_s6-overlay_baseimage:${stableVer#baseimage-s6-overlay_v}-zstd"}
+    docker push "${DEVROM}/aspnmy/debian_ssh_s6-overlay_baseimage:${stableVer#baseimage-s6-overlay_v}-zstd"}
 
-    echo -e "\n=== 推送 OCI zstd 压缩镜像 ==="
-    docker tag "${IMAGE_ZSTD_FULL}" "${DH}/${IMAGE_ZSTD_FULL}"
-    docker tag "${IMAGE_ZSTD_FULL}" "${GHCR}/${IMAGE_ZSTD_FULL}"
-    docker push "${DH}/${IMAGE_ZSTD_FULL}"
-    docker push "${GHCR}/${IMAGE_ZSTD_FULL}"
     
-    echo -e "\n✅ ${DH}/${IMGE_NAME}-lts 全部推送完成！"
-    echo -e "\n✅ ${GHCR}/${IMGE_NAME}-lts 全部推送完成！"
-    echo -e "\n✅ ${DH}/${IMAGE_ZSTD_FULL} 全部推送完成！"
-    echo -e "\n✅ ${GHCR}/${IMAGE_ZSTD_FULL} 全部推送完成！"
 }
 
 # ==========================
