@@ -11,7 +11,7 @@ sshd_config_dir="/etc/ssh/sshd_config"
 sshd_config_backdir="/etc/ssh/sshd_config_backup_aspnmy"
 sshkey_superman_pub="/root/.ssh/authorized_keys_superman.pub"
 DL_SSHKEY_dir="/aspnmy/wwwroot/ssh_key"
-ssh_us
+# ssh_us
 # ===================== 目录自动检测 + 创建 =====================
 # 提取需要检查的目录路径（只处理目录，不处理文件）
 check_and_create_dir() {
