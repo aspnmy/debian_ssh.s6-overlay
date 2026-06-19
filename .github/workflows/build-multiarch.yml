@@ -31,6 +31,18 @@ jobs:
           echo "baseimage=${BASEIMAGE}" >> $GITHUB_OUTPUT
           echo "BASEIMAGE: ${BASEIMAGE}"
 
+      - name: Download s6-overlay tarballs
+        run: |
+          S6_VER="${{ env.S6_VER }}"
+          DL_DIR="Dockerfile/s6-downloads"
+          mkdir -p "$DL_DIR"
+          BASE_URL="https://github.com/just-containers/s6-overlay/releases/download/v${S6_VER}"
+          for F in s6-overlay-noarch.tar.xz s6-overlay-x86_64.tar.xz s6-overlay-aarch64.tar.xz; do
+            echo "Downloading ${F}..."
+            curl -fsSL --retry 5 --retry-delay 10 --retry-max-time 120 "${BASE_URL}/${F}" -o "${DL_DIR}/${F}"
+          done
+          ls -la "$DL_DIR"
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
