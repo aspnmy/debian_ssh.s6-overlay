@@ -16,6 +16,10 @@ on:
 env:
   S6_VER: ${{ inputs.s6_version || '3.2.3.0' }}
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
