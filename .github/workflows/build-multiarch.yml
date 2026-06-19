@@ -5,6 +5,7 @@ on:
     branches: [baseimage]
     paths:
       - 'Dockerfile/**'
+      - '.github/workflows/**'
   workflow_dispatch:
     inputs:
       s6_version:
@@ -43,13 +44,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Login to devrom.org
-        uses: docker/login-action@v3
-        with:
-          registry: devrom.org
-          username: ${{ secrets.DEVROM_USERNAME }}
-          password: ${{ secrets.DEVROM_PASSWORD }}
-
       - name: Generate metadata
         id: meta
         run: |
@@ -72,7 +66,5 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository_owner }}/debian_ssh.s6-overlay:baseimage-${{ steps.meta.outputs.ver_tag }}
             ghcr.io/${{ github.repository_owner }}/debian_ssh.s6-overlay:baseimage-latest
-            devrom.org/aspnmy/debian_ssh_s6-overlay_baseimage:${{ steps.meta.outputs.ver_tag }}
-            devrom.org/aspnmy/debian_ssh_s6-overlay_baseimage:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
