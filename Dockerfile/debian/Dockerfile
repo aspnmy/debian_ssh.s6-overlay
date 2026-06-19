@@ -1,6 +1,5 @@
 # syntax=docker/dockerfile:1
 # debian_ssh.s6-overlay — Multi-arch Dockerfile
-# Build: docker buildx build --platform linux/amd64,linux/arm64 --build-arg BASEIMAGE=... --build-arg S6_VER=... .
 
 ARG BASEIMAGE=debian:bookworm-slim
 ARG S6_VER=3.2.3.0
@@ -8,15 +7,17 @@ ARG S6_VER=3.2.3.0
 FROM ${BASEIMAGE} AS s6-downloader
 ARG S6_VER
 
-# Pre-downloaded tarballs come from the CI workflow
+# s6-overlay tarballs are pre-downloaded by CI workflow
 COPY s6-downloads/ /tmp/s6-downloads/
-RUN mkdir -p /tmp/s6 \
-    && ln -sf /tmp/s6-downloads/s6-overlay-noarch.tar.xz /tmp/s6-noarch.tar.xz \
+RUN apt-get update && apt-get install -y --no-install-recommends xz-utils \
+    && mkdir -p /tmp/s6 \
+    && cp /tmp/s6-downloads/s6-overlay-noarch.tar.xz /tmp/s6-noarch.tar.xz \
     && ARCH=$(uname -m | sed 's/aarch64/aarch64/;s/x86_64/x86_64/') \
-    && ln -sf /tmp/s6-downloads/s6-overlay-${ARCH}.tar.xz /tmp/s6-arch.tar.xz \
+    && cp /tmp/s6-downloads/s6-overlay-${ARCH}.tar.xz /tmp/s6-arch.tar.xz \
     && tar -C /tmp/s6 -Jxpf /tmp/s6-noarch.tar.xz \
     && tar -C /tmp/s6 -Jxpf /tmp/s6-arch.tar.xz \
-    && rm -f /tmp/s6-noarch.tar.xz /tmp/s6-arch.tar.xz
+    && rm -f /tmp/s6-noarch.tar.xz /tmp/s6-arch.tar.xz \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 FROM ${BASEIMAGE}
 ENV DEBIAN_FRONTEND=noninteractive
