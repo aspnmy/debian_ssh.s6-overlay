@@ -3,7 +3,8 @@ set -euo pipefail
 
 # ==========================
 # debian_ssh.s6-overlay build script
-# 多阶段构建 + buildx 多架构支持 (amd64/arm64)
+# 生成 Dockerfile 后由 GitHub Actions 工作流完成多架构构建
+# 本地仅支持 legacy 单架构构建（无 buildx/binfmt_misc 时）
 # ==========================
 root_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 tmp_dir="${root_dir}/tmp"
@@ -29,6 +30,9 @@ stableVer="baseimage-s6-overlay_v${S6_VER}_${timeBuild}"
 IMGE_NAME="${USER_REPO}:${stableVer}"
 IMAGE_ZSTD="${IMGE_NAME}-zstd-lts"
 
+# Dockerfile 路径（独立文件，ARG 参数化）
+DOCKERFILE="${root_dir}/Dockerfile"
+
 # 多架构平台列表
 PLATFORMS=("linux/amd64" "linux/arm64")
 
@@ -40,86 +44,13 @@ use_buildx() {
 }
 
 # ==========================
-# 构建 Dockerfile 模板
-# ==========================
-gen_dockerfile() {
-    local dockerfile="${tmp_dir}/Dockerfile"
-    cat > "$dockerfile" << 'DOCKERFILE'
-# syntax=docker/dockerfile:1
-FROM ${BASEIMAGE} AS s6-downloader
-RUN apt-get update && apt-get install -y --no-install-recommends xz-utils curl ca-certificates \
-    && mkdir -p /tmp/s6 \
-    && curl -fsSL https://github.com/just-containers/s6-overlay/releases/download/v${S6_VER}/s6-overlay-noarch.tar.xz -o /tmp/s6-noarch.tar.xz \
-    && curl -fsSL https://github.com/just-containers/s6-overlay/releases/download/v${S6_VER}/s6-overlay-$(uname -m | sed 's/aarch64/aarch64/;s/x86_64/x86_64/').tar.xz -o /tmp/s6-arch.tar.xz \
-    && tar -C /tmp/s6 -Jxpf /tmp/s6-noarch.tar.xz \
-    && tar -C /tmp/s6 -Jxpf /tmp/s6-arch.tar.xz \
-    && rm -f /tmp/s6-noarch.tar.xz /tmp/s6-arch.tar.xz
-
-# Runtime stage: minimal Debian + SSH + s6-overlay
-FROM ${BASEIMAGE}
-ENV DEBIAN_FRONTEND=noninteractive
-
-# Install only openssh-server netcat-openbsd python3, clean up
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends openssh-server netcat-openbsd python3 \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
-# Fix container warnings early
-COPY app/roottools/fix-warnings.sh /aspnmy/bin/
-RUN bash /aspnmy/bin/fix-warnings.sh
-
-# Copy s6-overlay
-COPY --from=s6-downloader /tmp/s6/ /
-
-# Copy tools
-COPY app/roottools/setRootKey_Cli.sh.s6 /aspnmy/bin/
-COPY app/roottools/mini-key-server.sh /aspnmy/bin/
-RUN chmod +x /aspnmy/bin/setRootKey_Cli.sh.s6
-RUN chmod +x /aspnmy/bin/mini-key-server.sh
-
-# Timezone
-RUN rm -f /etc/localtime \
-    && ln -s /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
-    && echo "Asia/Shanghai" > /etc/timezone
-
-# SSH directories
-RUN mkdir -p /root/.ssh /run/sshd /var/run/sshd /aspnmy/bin /aspnmy/wwwroot/ssh_key \
-    && chmod 700 /root/.ssh /var/run/sshd \
-    && chmod 755 /run/sshd
-
-# Run SSH key setup
-RUN bash /aspnmy/bin/setRootKey_Cli.sh.s6 superman
-
-# Configure s6-overlay for sshd
-RUN mkdir -p /etc/s6-overlay/s6-rc.d/sshd/dependencies.d /etc/s6-overlay/s6-rc.d/sshd/log /var/log/sshd \
-    && touch /etc/s6-overlay/s6-rc.d/user/contents.d/sshd \
-    && touch /etc/s6-overlay/s6-rc.d/sshd/dependencies.d/base \
-    && echo "longrun" > /etc/s6-overlay/s6-rc.d/sshd/type \
-    && printf '#!/bin/sh\n/usr/sbin/sshd -D\n' > /etc/s6-overlay/s6-rc.d/sshd/run \
-    && chmod +x /etc/s6-overlay/s6-rc.d/sshd/run \
-    && printf '#!/bin/sh\nexec s6-log -b -- n20 s1000000 /var/log/sshd\n' > /etc/s6-overlay/s6-rc.d/sshd/log/run \
-    && chmod +x /etc/s6-overlay/s6-rc.d/sshd/log/run
-
-HEALTHCHECK --interval=30s --timeout=5s CMD pgrep sshd || exit 1
-EXPOSE 25
-EXPOSE 8880
-EXPOSE 622
-ENTRYPOINT ["/init"]
-DOCKERFILE
-
-    export BASEIMAGE S6_VER
-    envsubst < "$dockerfile" > "${dockerfile}.rendered"
-    mv "${dockerfile}.rendered" "$dockerfile"
-    echo "$dockerfile"
-}
-
-# ==========================
-# 构建镜像
+# 构建镜像（使用独立 Dockerfile + build-arg）
 # ==========================
 build_image() {
-    local dockerfile
-    dockerfile=$(gen_dockerfile)
+    if [ ! -f "$DOCKERFILE" ]; then
+        echo "Error: Dockerfile not found at ${DOCKERFILE}"
+        exit 1
+    fi
 
     if use_buildx; then
         echo "=== Buildx multi-arch (amd64 + arm64) ==="
@@ -139,9 +70,11 @@ build_image() {
 
             echo "=== Building ${platform} ==="
             docker buildx build --platform "$platform" \
+                --build-arg BASEIMAGE="${BASEIMAGE}" \
+                --build-arg S6_VER="${S6_VER}" \
                 --tag "${arch_tag}" \
                 --load \
-                -f "$dockerfile" ..
+                -f "$DOCKERFILE" ..
 
             arch_tags+=("${arch_tag}")
         done
@@ -155,11 +88,12 @@ build_image() {
         touch "${tmp_dir}/.is_multiarch"
     else
         echo "=== Legacy single-arch build ==="
-        docker build --no-cache -f "$dockerfile" -t "${IMGE_NAME}" ..
+        docker build --no-cache \
+            --build-arg BASEIMAGE="${BASEIMAGE}" \
+            --build-arg S6_VER="${S6_VER}" \
+            -f "$DOCKERFILE" -t "${IMGE_NAME}" ..
         rm -f "${tmp_dir}/.is_multiarch"
     fi
-
-    rm -f "$dockerfile"
 }
 
 # ==========================

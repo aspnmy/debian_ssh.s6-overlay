@@ -1,0 +1,88 @@
+name: Build Multi-Arch Image
+
+on:
+  push:
+    branches: [baseimage]
+    paths:
+      - 'Dockerfile/**'
+  workflow_dispatch:
+    inputs:
+      s6_version:
+        description: 's6-overlay version'
+        required: false
+        default: '3.2.3.0'
+
+env:
+  S6_VER: ${{ inputs.s6_version || '3.2.3.0' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read base image config
+        id: config
+        run: |
+          BASEIMAGE=$(grep BASEIMAGE Dockerfile/debian/debian-base.md | cut -d= -f2)
+          echo "baseimage=${BASEIMAGE}" >> $GITHUB_OUTPUT
+          echo "BASEIMAGE: ${BASEIMAGE}"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to devrom.org
+        uses: docker/login-action@v3
+        with:
+          registry: devrom.org
+          username: ${{ secrets.DEVROM_USERNAME }}
+          password: ${{ secrets.DEVROM_PASSWORD }}
+
+      - name: Generate metadata
+        id: meta
+        run: |
+          TIMESTAMP=$(date +"%Y%m%d%H")
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          VER_TAG="v${S6_VER}-${TIMESTAMP}"
+          echo "ver_tag=${VER_TAG}" >> $GITHUB_OUTPUT
+          echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+
+      - name: Build and push multi-arch
+        uses: docker/build-push-action@v6
+        with:
+          context: ./Dockerfile
+          file: ./Dockerfile/debian/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            BASEIMAGE=${{ steps.config.outputs.baseimage }}
+            S6_VER=${{ env.S6_VER }}
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/debian_ssh.s6-overlay:baseimage-${{ steps.meta.outputs.ver_tag }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/debian_ssh.s6-overlay:baseimage-latest
+            ghcr.io/${{ github.repository_owner }}/debian_ssh.s6-overlay:baseimage-${{ steps.meta.outputs.ver_tag }}
+            ghcr.io/${{ github.repository_owner }}/debian_ssh.s6-overlay:baseimage-latest
+            devrom.org/aspnmy/debian_ssh_s6-overlay_baseimage:${{ steps.meta.outputs.ver_tag }}
+            devrom.org/aspnmy/debian_ssh_s6-overlay_baseimage:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
