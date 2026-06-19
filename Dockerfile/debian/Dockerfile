@@ -8,8 +8,8 @@ ARG S6_VER=3.2.3.0
 FROM ${BASEIMAGE} AS s6-downloader
 RUN apt-get update && apt-get install -y --no-install-recommends xz-utils curl ca-certificates \
     && mkdir -p /tmp/s6 \
-    && curl -fsSL https://github.com/just-containers/s6-overlay/releases/download/v${S6_VER}/s6-overlay-noarch.tar.xz -o /tmp/s6-noarch.tar.xz \
-    && curl -fsSL https://github.com/just-containers/s6-overlay/releases/download/v${S6_VER}/s6-overlay-$(uname -m | sed 's/aarch64/aarch64/;s/x86_64/x86_64/').tar.xz -o /tmp/s6-arch.tar.xz \
+    && curl -fsSL --retry 5 --retry-delay 10 --retry-max-time 120 https://github.com/just-containers/s6-overlay/releases/download/v${S6_VER}/s6-overlay-noarch.tar.xz -o /tmp/s6-noarch.tar.xz \
+    && curl -fsSL --retry 5 --retry-delay 10 --retry-max-time 120 https://github.com/just-containers/s6-overlay/releases/download/v${S6_VER}/s6-overlay-$(uname -m | sed 's/aarch64/aarch64/;s/x86_64/x86_64/').tar.xz -o /tmp/s6-arch.tar.xz \
     && tar -C /tmp/s6 -Jxpf /tmp/s6-noarch.tar.xz \
     && tar -C /tmp/s6 -Jxpf /tmp/s6-arch.tar.xz \
     && rm -f /tmp/s6-noarch.tar.xz /tmp/s6-arch.tar.xz
