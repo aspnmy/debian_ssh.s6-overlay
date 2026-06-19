@@ -3,7 +3,7 @@ set -euo pipefail
 
 # ==========================
 # debian_ssh.s6-overlay build script
-# 多阶段构建 + buildx 多架构支持
+# 多阶段构建 + buildx 多架构支持 (amd64/arm64)
 # ==========================
 root_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 tmp_dir="${root_dir}/tmp"
@@ -29,6 +29,9 @@ stableVer="baseimage-s6-overlay_v${S6_VER}_${timeBuild}"
 IMGE_NAME="${USER_REPO}:${stableVer}"
 IMAGE_ZSTD="${IMGE_NAME}-zstd-lts"
 
+# 多架构平台列表
+PLATFORMS=("linux/amd64" "linux/arm64")
+
 # ==========================
 # 检测 buildx 可用性
 # ==========================
@@ -37,9 +40,9 @@ use_buildx() {
 }
 
 # ==========================
-# 构建
+# 构建 Dockerfile 模板
 # ==========================
-build_image() {
+gen_dockerfile() {
     local dockerfile="${tmp_dir}/Dockerfile"
     cat > "$dockerfile" << 'DOCKERFILE'
 # syntax=docker/dockerfile:1
@@ -105,19 +108,57 @@ EXPOSE 622
 ENTRYPOINT ["/init"]
 DOCKERFILE
 
-    export BASEIMAGE S6_VER ; envsubst < "$dockerfile" > "${dockerfile}.rendered"
+    export BASEIMAGE S6_VER
+    envsubst < "$dockerfile" > "${dockerfile}.rendered"
     mv "${dockerfile}.rendered" "$dockerfile"
+    echo "$dockerfile"
+}
+
+# ==========================
+# 构建镜像
+# ==========================
+build_image() {
+    local dockerfile
+    dockerfile=$(gen_dockerfile)
 
     if use_buildx; then
-        echo "=== Buildx multi-arch ==="
-        docker buildx build --platform linux/amd64,linux/arm64 \
-            --tag "${IMGE_NAME}" \
-            --load \
-            -f "$dockerfile" ..
+        echo "=== Buildx multi-arch (amd64 + arm64) ==="
+
+        # 确保 buildx builder 存在
+        local builder="s6-multiarch-builder"
+        if ! docker buildx inspect "$builder" >/dev/null 2>&1; then
+            docker buildx create --name "$builder" --use --bootstrap
+        else
+            docker buildx use "$builder"
+        fi
+
+        local arch_tags=()
+        for platform in "${PLATFORMS[@]}"; do
+            local arch="${platform#linux/}"
+            local arch_tag="${IMGE_NAME}-${arch}"
+
+            echo "=== Building ${platform} ==="
+            docker buildx build --platform "$platform" \
+                --tag "${arch_tag}" \
+                --load \
+                -f "$dockerfile" ..
+
+            arch_tags+=("${arch_tag}")
+        done
+
+        # 创建多架构 manifest 列表
+        echo "=== Creating multi-arch manifest: ${IMGE_NAME} ==="
+        docker manifest create "${IMGE_NAME}" "${arch_tags[@]}"
+        echo "Multi-arch manifest created: ${IMGE_NAME}"
+
+        # 标记为多架构构建
+        touch "${tmp_dir}/.is_multiarch"
     else
-        echo "=== Legacy build ==="
+        echo "=== Legacy single-arch build ==="
         docker build --no-cache -f "$dockerfile" -t "${IMGE_NAME}" ..
+        rm -f "${tmp_dir}/.is_multiarch"
     fi
+
     rm -f "$dockerfile"
 }
 
@@ -125,12 +166,33 @@ DOCKERFILE
 # zstd 压缩
 # ==========================
 package_zstd() {
-    local tar_file="${tmp_dir}/img.tar"
-    docker save "${IMGE_NAME}" -o "$tar_file"
-    zstd --fast=1 --rm "$tar_file"
-    docker load -i "${tar_file}.zst"
-    docker tag "${IMGE_NAME}" "${IMAGE_ZSTD}"
-    rm -f "${tmp_dir}/img.tar.zst"
+    if [ -f "${tmp_dir}/.is_multiarch" ]; then
+        echo "=== Zstd multi-arch packaging ==="
+        local arch_tags=()
+        for platform in "${PLATFORMS[@]}"; do
+            local arch="${platform#linux/}"
+            local arch_tag="${IMGE_NAME}-${arch}"
+
+            local tar_file="${tmp_dir}/img-${arch}.tar"
+            docker save "${arch_tag}" -o "$tar_file"
+            zstd --fast=1 --rm "$tar_file"
+            docker load -i "${tar_file}.zst"
+            rm -f "${tmp_dir}/img-${arch}.tar.zst"
+
+            arch_tags+=("${arch_tag}")
+        done
+
+        # 重建 manifest（load 后可能丢失）
+        docker manifest create "${IMGE_NAME}" "${arch_tags[@]}" 2>/dev/null || true
+    else
+        echo "=== Zstd single-arch packaging ==="
+        local tar_file="${tmp_dir}/img.tar"
+        docker save "${IMGE_NAME}" -o "$tar_file"
+        zstd --fast=1 --rm "$tar_file"
+        docker load -i "${tar_file}.zst"
+        docker tag "${IMGE_NAME}" "${IMAGE_ZSTD}"
+        rm -f "${tmp_dir}/img.tar.zst"
+    fi
 }
 
 # ==========================
@@ -138,17 +200,51 @@ package_zstd() {
 # ==========================
 push_devrom() {
     local ver_tag="${stableVer#baseimage-s6-overlay_v}"
-    echo "=== Push devrom.org ==="
-    docker tag "${IMGE_NAME}" "${DEVROM}/aspnmy/debian_ssh_s6-overlay_baseimage:${ver_tag}"
-    docker push "${DEVROM}/aspnmy/debian_ssh_s6-overlay_baseimage:${ver_tag}"
-    docker tag "${IMAGE_ZSTD}" "${DEVROM}/aspnmy/debian_ssh_s6-overlay_baseimage:${ver_tag}-zstd"
-    docker push "${DEVROM}/aspnmy/debian_ssh_s6-overlay_baseimage:${ver_tag}-zstd"
+    echo "=== Push to devrom.org ==="
+
+    if [ -f "${tmp_dir}/.is_multiarch" ]; then
+        # 多架构推送：逐架构 push + manifest push
+        local reg_tags=()
+        for platform in "${PLATFORMS[@]}"; do
+            local arch="${platform#linux/}"
+            local arch_tag="${IMGE_NAME}-${arch}"
+            local reg_tag="${DEVROM}/aspnmy/debian_ssh_s6-overlay_baseimage:${ver_tag}-${arch}"
+
+            docker tag "${arch_tag}" "${reg_tag}"
+            docker push "${reg_tag}"
+            reg_tags+=("${reg_tag}")
+        done
+
+        # 创建并推送多架构 manifest
+        local manifest_tag="${DEVROM}/aspnmy/debian_ssh_s6-overlay_baseimage:${ver_tag}"
+        docker manifest create "${manifest_tag}" "${reg_tags[@]}"
+        docker manifest push "${manifest_tag}"
+
+        # zstd manifest
+        local manifest_zstd="${DEVROM}/aspnmy/debian_ssh_s6-overlay_baseimage:${ver_tag}-zstd"
+        docker manifest create "${manifest_zstd}" "${reg_tags[@]}"
+        docker manifest push "${manifest_zstd}"
+    else
+        # 单架构推送（保持兼容）
+        docker tag "${IMGE_NAME}" "${DEVROM}/aspnmy/debian_ssh_s6-overlay_baseimage:${ver_tag}"
+        docker push "${DEVROM}/aspnmy/debian_ssh_s6-overlay_baseimage:${ver_tag}"
+        docker tag "${IMAGE_ZSTD}" "${DEVROM}/aspnmy/debian_ssh_s6-overlay_baseimage:${ver_tag}-zstd"
+        docker push "${DEVROM}/aspnmy/debian_ssh_s6-overlay_baseimage:${ver_tag}-zstd"
+    fi
+}
+
+# ==========================
+# 清理
+# ==========================
+cleanup() {
+    rm -rf "${tmp_dir}"
 }
 
 # ==========================
 # main
 # ==========================
 main() {
+    trap cleanup EXIT
     build_image
     package_zstd
     push_devrom
