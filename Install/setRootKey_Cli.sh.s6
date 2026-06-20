@@ -72,7 +72,7 @@ PrintMotd no
 AcceptEnv LANG LC_*
 Subsystem sftp /usr/lib/openssh/sftp-server
 PubkeyAuthentication yes
-AuthorizedKeysFile .ssh/authorized_keys_superman.pub
+AuthorizedKeysFile ${sshkey_superman_pub}
 
 EOF
 
@@ -97,7 +97,7 @@ PrintMotd no
 AcceptEnv LANG LC_*
 Subsystem sftp /usr/lib/openssh/sftp-server
 PubkeyAuthentication yes
-AuthorizedKeysFile .ssh/authorized_keys.pub
+AuthorizedKeysFile ${sshd_config_dir}/authorized_keys.pub
 
 EOF
 
