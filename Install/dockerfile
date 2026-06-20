@@ -1,40 +1,57 @@
 # ==============================================================
-# Dockerfile - s6-overlay v3 + SSH (命令合并优化)
+# Dockerfile - s6-overlay v3 (自动获取最新版本 + aarch64 支持)
 # ==============================================================
 
-# ========== 第一阶段：准备 s6-overlay ==========
+# ========== 第一阶段：自动获取并下载 s6-overlay ==========
 FROM alpine:latest AS s6-preloader
 
 ARG TARGETARCH
 
-COPY s6-downloads/ /tmp/s6-downloads/
+# 安装 curl 和 jq
+RUN apk add --no-cache curl jq
 
-RUN echo "🔧 检测到架构: ${TARGETARCH:-amd64}" \
+# 从 GitHub API 获取最新版本，并支持 amd64/arm64/aarch64
+RUN echo "🔍 正在获取 s6-overlay 最新版本..." \
+    && LATEST_VERSION=$(curl -s https://api.github.com/repos/just-containers/s6-overlay/releases/latest | jq -r '.tag_name') \
+    && echo "✅ 最新版本: ${LATEST_VERSION}" \
+    && echo "🔧 检测到架构: ${TARGETARCH:-amd64}" \
     && mkdir -p /tmp/s6-overlay \
+    \
     && case "${TARGETARCH}" in \
-         amd64|"") \
-           tar -C /tmp/s6-overlay -Jxpf /tmp/s6-downloads/s6-overlay-noarch.tar.xz && \
-           tar -C /tmp/s6-overlay -Jxpf /tmp/s6-downloads/s6-overlay-x86_64.tar.xz ;; \
-         arm64) \
-           tar -C /tmp/s6-overlay -Jxpf /tmp/s6-downloads/s6-overlay-noarch.tar.xz && \
-           tar -C /tmp/s6-overlay -Jxpf /tmp/s6-downloads/s6-overlay-aarch64.tar.xz ;; \
+         amd64|x86_64|"") \
+           echo "  ➡️ 下载 noarch + x86_64" && \
+           curl -sL "https://github.com/just-containers/s6-overlay/releases/download/${LATEST_VERSION}/s6-overlay-noarch.tar.xz" \
+             -o /tmp/s6-overlay-noarch.tar.xz && \
+           curl -sL "https://github.com/just-containers/s6-overlay/releases/download/${LATEST_VERSION}/s6-overlay-x86_64.tar.xz" \
+             -o /tmp/s6-overlay-x86_64.tar.xz && \
+           tar -C /tmp/s6-overlay -Jxpf /tmp/s6-overlay-noarch.tar.xz && \
+           tar -C /tmp/s6-overlay -Jxpf /tmp/s6-overlay-x86_64.tar.xz && \
+           rm -f /tmp/s6-overlay-noarch.tar.xz /tmp/s6-overlay-x86_64.tar.xz ;; \
+         arm64|aarch64) \
+           echo "  ➡️ 下载 noarch + aarch64" && \
+           curl -sL "https://github.com/just-containers/s6-overlay/releases/download/${LATEST_VERSION}/s6-overlay-noarch.tar.xz" \
+             -o /tmp/s6-overlay-noarch.tar.xz && \
+           curl -sL "https://github.com/just-containers/s6-overlay/releases/download/${LATEST_VERSION}/s6-overlay-aarch64.tar.xz" \
+             -o /tmp/s6-overlay-aarch64.tar.xz && \
+           tar -C /tmp/s6-overlay -Jxpf /tmp/s6-overlay-noarch.tar.xz && \
+           tar -C /tmp/s6-overlay -Jxpf /tmp/s6-overlay-aarch64.tar.xz && \
+           rm -f /tmp/s6-overlay-noarch.tar.xz /tmp/s6-overlay-aarch64.tar.xz ;; \
          *) echo "❌ 不支持的架构: ${TARGETARCH}"; exit 1 ;; \
        esac \
-    && rm -rf /tmp/s6-downloads \
-    && echo "✅ s6-overlay 解压完成"
+    && echo "✅ s6-overlay ${LATEST_VERSION} 下载并解压完成"
 
-# ========== 第二阶段：主应用 ==========
+# ========== 第二阶段：主应用（Debian）==========
 FROM debian:bookworm-slim
 
 ARG TARGETARCH
 
-# 复制 s6-overlay
+# 复制 s6-overlay 文件
 COPY --from=s6-preloader /tmp/s6-overlay/ /
 
 # 复制脚本
 COPY ./setRootKey_Cli.sh.s6 /aspnmy/bin/
 
-# ===== 🚀 合并所有 RUN 为一条（减少层数）=====
+# 合并所有操作
 RUN apt-get update -qq \
     && apt-get install -y -qq --no-install-recommends \
        ca-certificates \
@@ -46,7 +63,6 @@ RUN apt-get update -qq \
        sudo \
     && rm -rf /var/lib/apt/lists/* \
     \
-    # chmod 脚本
     && chmod +x /aspnmy/bin/setRootKey_Cli.sh.s6 \
     \
     # 配置时区
@@ -54,10 +70,10 @@ RUN apt-get update -qq \
     && ln -s /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
     && echo "Asia/Shanghai" | tee /etc/timezone \
     \
-    # ⚠️ 以 root 权限执行 superman 模式
+    # 执行 superman 模式
     && /aspnmy/bin/setRootKey_Cli.sh.s6 superman \
     \
-    # 创建 s6-rc 服务目录结构（sshd + log）
+    # 创建 s6-rc 服务目录结构
     && mkdir -p /etc/s6-overlay/s6-rc.d/sshd/dependencies.d \
     && mkdir -p /etc/s6-overlay/s6-rc.d/sshd/log \
     && mkdir -p /etc/s6-overlay/s6-rc.d/user \
@@ -69,15 +85,12 @@ RUN apt-get update -qq \
     && printf '#!/bin/sh\nexec s6-log -b -- n20 s1000000 /var/log/sshd\n' > /etc/s6-overlay/s6-rc.d/sshd/log/run \
     && chmod +x /etc/s6-overlay/s6-rc.d/sshd/log/run \
     \
-    # 配置 SSH（允许 root，端口 622）
+    # 配置 SSH
     && mkdir -p /var/run/sshd \
     && sed -i 's/#Port 22/Port 622/' /etc/ssh/sshd_config \
     && sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config \
     && sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config \
     && echo "root:root" | chpasswd
-
-# 如果需要自定义 s6-rc.d 覆盖，可以保留这个 COPY
-# COPY ./s6-rc.d/ /etc/s6-overlay/s6-rc.d/
 
 EXPOSE 622
 ENTRYPOINT ["/init"]
