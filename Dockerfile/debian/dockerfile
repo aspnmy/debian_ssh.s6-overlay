@@ -1,0 +1,31 @@
+# ========== 第一阶段：准备 s6-overlay（从本地 COPY）==========
+FROM alpine:latest AS s6-preloader
+
+ARG TARGETARCH
+
+# 复制预下载的所有压缩包
+COPY s6-downloads/ /tmp/s6-downloads/
+
+RUN mkdir -p /tmp/s6-overlay \
+    && case "${TARGETARCH}" in \
+         amd64|"") \
+           echo "  ➡️ 处理 x86_64 架构" && \
+           tar -C /tmp/s6-overlay -Jxpf /tmp/s6-downloads/s6-overlay-noarch.tar.xz && \
+           tar -C /tmp/s6-overlay -Jxpf /tmp/s6-downloads/s6-overlay-x86_64.tar.xz ;; \
+         arm64) \
+           echo "  ➡️ 处理 arm64 架构" && \
+           tar -C /tmp/s6-overlay -Jxpf /tmp/s6-downloads/s6-overlay-noarch.tar.xz && \
+           tar -C /tmp/s6-overlay -Jxpf /tmp/s6-downloads/s6-overlay-aarch64.tar.xz ;; \
+         *) echo "❌ 不支持的架构: ${TARGETARCH}"; exit 1 ;; \
+       esac \
+    && rm -rf /tmp/s6-downloads
+
+# ========== 第二阶段：主应用 ==========
+FROM debian:bookworm-slim
+
+ARG TARGETARCH
+
+# 复制 s6-overlay
+COPY --from=s6-preloader /tmp/s6-overlay/ /
+
+# 后续其他指令...
