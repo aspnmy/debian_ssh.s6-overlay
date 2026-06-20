@@ -7,10 +7,12 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 # 主要实现 对root账号登陆ssh的初始化配置
+sshd_config_pathdir="/etc/ssh/"
 sshd_config_dir="/etc/ssh/sshd_config"
 sshd_config_backdir="/etc/ssh/sshd_config_backup_aspnmy"
-sshkey_superman_pub="${sshd_config_dir}/authorized_keys_superman.pub"
+sshkey_superman_pub="${sshd_config_pathdir}/authorized_keys_superman.pub"
 DL_SSHKEY_dir="/aspnmy/wwwroot/ssh_key"
+mkdir -p  ${DL_SSHKEY_dir}
 
 # -------------------函数定义-------------------
 
