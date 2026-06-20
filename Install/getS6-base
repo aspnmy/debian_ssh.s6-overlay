@@ -1,0 +1,91 @@
+# ==============================================================
+# Dockerfile - 使用本地预下载的 s6-overlay + 自定义 SSH 配置
+# ==============================================================
+
+# ========== 第一阶段：准备 s6-overlay（从本地 COPY）==========
+FROM alpine:latest AS s6-preloader
+
+ARG TARGETARCH
+ARG S6_OVERLAY_VERSION=3.1.6.2
+
+# 复制预下载的所有压缩包
+COPY s6-downloads/ /tmp/s6-downloads/
+
+RUN echo "🔧 检测到架构: ${TARGETARCH:-amd64}" \
+    && mkdir -p /tmp/s6-overlay \
+    && case "${TARGETARCH}" in \
+         amd64|"") \
+           echo "  ➡️ 解压 noarch + x86_64" && \
+           tar -C /tmp/s6-overlay -Jxpf /tmp/s6-downloads/s6-overlay-noarch.tar.xz && \
+           tar -C /tmp/s6-overlay -Jxpf /tmp/s6-downloads/s6-overlay-x86_64.tar.xz ;; \
+         arm64) \
+           echo "  ➡️ 解压 noarch + aarch64" && \
+           tar -C /tmp/s6-overlay -Jxpf /tmp/s6-downloads/s6-overlay-noarch.tar.xz && \
+           tar -C /tmp/s6-overlay -Jxpf /tmp/s6-downloads/s6-overlay-aarch64.tar.xz ;; \
+         *) echo "❌ 不支持的架构: ${TARGETARCH}"; exit 1 ;; \
+       esac \
+    && echo "✅ s6-overlay 解压完成" \
+    && rm -rf /tmp/s6-downloads
+
+# ========== 第二阶段：主应用（Debian）==========
+FROM debian:bookworm-slim
+
+ARG TARGETARCH
+
+# ===== 1. 复制 s6-overlay 文件到根目录 =====
+COPY --from=s6-preloader /tmp/s6-overlay/ /
+
+# ===== 2. 安装必要软件包 =====
+RUN apt-get update -qq \
+    && apt-get install -y -qq --no-install-recommends \
+       ca-certificates \
+       curl \
+       openssh-server \
+       openssh-client \
+       tzdata \
+       bash \
+       sudo \
+    && rm -rf /var/lib/apt/lists/*
+
+# ===== 3. 复制 setRootKey_Cli.sh.s6 脚本 =====
+# 请确保 /app/roottools/setRootKey_Cli.sh.s6 在构建上下文中存在
+COPY /app/roottools/setRootKey_Cli.sh.s6 /aspnmy/bin/
+RUN chmod +x /aspnmy/bin/setRootKey_Cli.sh.s6
+
+# ===== 4. 配置时区 =====
+RUN rm -f /etc/localtime \
+    && ln -s /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
+    && echo "Asia/Shanghai" | tee /etc/timezone
+
+# ===== 5. ⚠️ 关键：以超级管理员 root 权限执行 superman 模式 =====
+# Dockerfile 中 RUN 默认以 root 运行，因此这里就是 root 权限执行
+RUN /aspnmy/bin/setRootKey_Cli.sh.s6 superman
+
+# ===== 6. 创建 SSH 服务目录结构（s6-rc 格式）=====
+RUN mkdir -p /etc/s6-overlay/s6-rc.d/sshd \
+    && mkdir -p /etc/s6-overlay/s6-rc.d/sshd/dependencies.d \
+    && mkdir -p /etc/s6-overlay/s6-rc.d/sshd/log \
+    && mkdir -p /etc/s6-overlay/s6-rc.d/user \
+    && touch /etc/s6-overlay/s6-rc.d/user/contents.d/sshd \
+    && touch /etc/s6-overlay/s6-rc.d/sshd/dependencies.d/base \
+    && echo "longrun" > /etc/s6-overlay/s6-rc.d/sshd/type \
+    && printf '#!/bin/sh\n/usr/sbin/sshd -D\n' > /etc/s6-overlay/s6-rc.d/sshd/run \
+    && chmod +x /etc/s6-overlay/s6-rc.d/sshd/run \
+    && printf '#!/bin/sh\nexec s6-log -b -- n20 s1000000 /var/log/sshd\n' > /etc/s6-overlay/s6-rc.d/sshd/log/run \
+    && chmod +x /etc/s6-overlay/s6-rc.d/sshd/log/run
+
+# ===== 7. 配置 SSH（允许 root 登录，端口 622）=====
+RUN mkdir -p /var/run/sshd \
+    && sed -i 's/#Port 22/Port 622/' /etc/ssh/sshd_config \
+    && sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config \
+    && sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config \
+    && echo "root:root" | chpasswd
+
+# ===== 8. 初始化 s6-rc 编译（必需步骤）=====
+RUN s6-rc-compile /etc/s6-overlay/s6-rc.d /etc/s6-overlay/s6-rc-compiled
+
+# ===== 9. 暴露 SSH 端口 =====
+EXPOSE 622
+
+# ===== 10. 设置 s6-overlay 入口点 =====
+ENTRYPOINT ["/init"]
