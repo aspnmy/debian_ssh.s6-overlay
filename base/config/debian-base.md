@@ -1,0 +1,1 @@
+BASEIMAGE=debian:bookworm-slim
