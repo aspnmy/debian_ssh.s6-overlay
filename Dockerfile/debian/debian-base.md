@@ -1,1 +1,0 @@
-BASEIMAGE=ghcr.io/aspnmy/debian-base:bookworm-debian12-dev-fixed-lts
