@@ -48,8 +48,8 @@ RUN apt-get update -qq \
     && rm -rf /var/lib/apt/lists/*
 
 # ===== 3. 复制 setRootKey_Cli.sh.s6 脚本 =====
-# 请确保 /app/roottools/setRootKey_Cli.sh.s6 在构建上下文中存在
-COPY /app/roottools/setRootKey_Cli.sh.s6 /aspnmy/bin/
+# 请确保 ./setRootKey_Cli.sh.s6 在构建上下文中存在
+COPY ./setRootKey_Cli.sh.s6 /aspnmy/bin/
 RUN chmod +x /aspnmy/bin/setRootKey_Cli.sh.s6
 
 # ===== 4. 配置时区 =====
