@@ -67,4 +67,25 @@ RUN mkdir -p /etc/s6-overlay/s6-rc.d/sshd \
     && mkdir -p /etc/s6-overlay/s6-rc.d/sshd/log \
     && mkdir -p /etc/s6-overlay/s6-rc.d/user \
     && touch /etc/s6-overlay/s6-rc.d/user/contents.d/sshd \
-    && touch /
+    && touch /etc/s6-overlay/s6-rc.d/sshd/dependencies.d/base \
+    && echo "longrun" > /etc/s6-overlay/s6-rc.d/sshd/type \
+    && printf '#!/bin/sh\n/usr/sbin/sshd -D\n' > /etc/s6-overlay/s6-rc.d/sshd/run \
+    && chmod +x /etc/s6-overlay/s6-rc.d/sshd/run \
+    && printf '#!/bin/sh\nexec s6-log -b -- n20 s1000000 /var/log/sshd\n' > /etc/s6-overlay/s6-rc.d/sshd/log/run \
+    && chmod +x /etc/s6-overlay/s6-rc.d/sshd/log/run
+
+# ===== 7. 配置 SSH（允许 root 登录，端口 622）=====
+RUN mkdir -p /var/run/sshd \
+    && sed -i 's/#Port 22/Port 622/' /etc/ssh/sshd_config \
+    && sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config \
+    && sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config \
+    && echo "root:root" | chpasswd
+
+# ===== 8. 初始化 s6-rc 编译（必需步骤）=====
+RUN s6-rc-compile /etc/s6-overlay/s6-rc.d /etc/s6-overlay/s6-rc-compiled
+
+# ===== 9. 暴露 SSH 端口 =====
+EXPOSE 622
+
+# ===== 10. 设置 s6-overlay 入口点 =====
+ENTRYPOINT ["/init"]
