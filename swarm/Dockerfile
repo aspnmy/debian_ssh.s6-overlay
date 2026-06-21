@@ -1,31 +1,39 @@
-ARG GO_VERSION=1.27rc1
-#golang:1.27rc1-alpine3.24
-# 使用 --platform 拉取目标架构的 golang 镜像
-FROM --platform=$TARGETPLATFORM golang:${GO_VERSION}-alpine3.24 AS builder
+FROM golang:1.27rc1-alpine3.24 AS builder
 
-# 由 buildx 自动注入的目标平台参数
+ARG TARGETPLATFORM
 ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETVARIANT
 
-# 保留作为构建时的覆盖参数（与原有兼容）
+# 保留用户自定义回退参数
 ARG GOOS
 ARG GOARCH
 
 COPY . /go/src/github.com/docker/swarm
 WORKDIR /go/src/github.com/docker/swarm
 
+# 创建兼容的 go.mod 以适配 Go 1.27+（强制 modules）
 RUN set -ex \
     && apk add --no-cache --virtual .build-deps git \
-    && GOARCH=${TARGETARCH:-$GOARCH} GOOS=${TARGETOS:-$GOOS} CGO_ENABLED=0 \
-       go install -v -a -tags netgo -installsuffix netgo \
-       -ldflags "-w -X github.com/docker/swarm/version.GITCOMMIT=$(git rev-parse --short HEAD) -X github.com/docker/swarm/version.BUILDTIME=$(date -u +%FT%T%z)" \
+    && GITCOMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown") \
+    && BUILDTIME=$(date -u +%FT%T%z) \
+    && GOARCH="${TARGETARCH:-${GOARCH:-amd64}}" \
+       GOOS="${TARGETOS:-${GOOS:-linux}}" \
+       CGO_ENABLED=0 \
+    # 创建兼容的 go.mod，声明模块路径
+    && mkdir -p /go/src/github.com/docker/swarm \
+    && cd /go/src/github.com/docker/swarm \
+    && go mod init github.com/docker/swarm \
+    # 注意：此项目需要一些 vendor/adapter 包，可能需 go mod tidy
+    # 但为了最小可行构建，先尝试直接编译
+    && go mod tidy -e 2>/dev/null || true \
+    && go install -v -a -tags netgo -installsuffix netgo \
+           -ldflags "-w -X github.com/docker/swarm/version.GITCOMMIT=${GITCOMMIT} -X github.com/docker/swarm/version.BUILDTIME=${BUILDTIME}" \
     && apk del .build-deps
 
-ENV SWARM_HOST :2375
+ENV SWARM_HOST=:2375
 EXPOSE 2375
 
-# 注意：$HOME 是运行时环境变量，在 Dockerfile 中可能为空，建议指定绝对路径
 VOLUME /root/.swarm
 
 ENTRYPOINT ["swarm"]
