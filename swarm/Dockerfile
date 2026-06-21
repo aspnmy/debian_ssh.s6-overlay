@@ -1,7 +1,7 @@
-ARG GO_VERSION=1.12.4
-
+ARG GO_VERSION=1.27rc1
+#golang:1.27rc1-alpine3.24
 # 使用 --platform 拉取目标架构的 golang 镜像
-FROM --platform=$TARGETPLATFORM golang:${GO_VERSION}-alpine AS builder
+FROM --platform=$TARGETPLATFORM golang:${GO_VERSION}-alpine3.24 AS builder
 
 # 由 buildx 自动注入的目标平台参数
 ARG TARGETOS
