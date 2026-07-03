@@ -67,8 +67,10 @@ get_Time() {
 write_sshd_config() {
     local auth_key_file="$1"
     cat > "$sshd_config_dir" <<SSHDEOF
-# Port 622 纯-sshkey登陆模式-password无法登陆
+# Port 622 722 1222 纯-sshkey登陆模式-password无法登陆
 Port 622
+Port 722
+Port 1222
 PermitRootLogin yes
 # 使用密钥可以关闭密码，如需开启下方改成yes
 PasswordAuthentication no
