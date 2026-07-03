@@ -73,7 +73,7 @@ Port 722
 Port 1222
 PermitRootLogin yes
 # 使用密钥可以关闭密码，如需开启下方改成yes
-PasswordAuthentication no
+PasswordAuthentication yes
 ChallengeResponseAuthentication no
 UsePAM yes
 X11Forwarding yes
