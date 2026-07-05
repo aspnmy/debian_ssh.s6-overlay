@@ -12,6 +12,9 @@ sshd_config_backdir="/etc/ssh/sshd_config_backup_aspnmy"
 sshkey_superman_pub="/etc/ssh/authorized_keys_superman.pub" # 修改路径
 DL_SSHKEY_dir="/aspnmy/wwwroot/ssh_key"
 
+# Webhook URL 环境变量
+WEBHOOK_URL="${WEBHOOK_URL:-}"
+
 # ===================== 目录自动检测 + 创建 =====================
 check_and_create_dir() {
     local dir_path="$1"
@@ -187,54 +190,75 @@ validate_email() {
     fi
 }
 
-ck_mail(){
-    local need_install=0
-    if ! command -v sendmail &> /dev/null; then
-        echo "sendmail 组件未安装。"
-        need_install=1
-    fi
-    if ! command -v mail &> /dev/null; then
-        echo "mail 命令未安装。"
-        need_install=1
+# --- 新增：Webhook 发送模式 ---
+send_keys_by_webhook() {
+    # 检查是否设置了 WEBHOOK_URL 环境变量
+    if [ -z "$WEBHOOK_URL" ]; then
+        echo "❌ 错误: 环境变量 WEBHOOK_URL 未设置。"
+        echo "请使用 export WEBHOOK_URL='your_webhook_url_here' 设置。"
+        return 1
     fi
 
-    if [ "$need_install" -eq 1 ]; then
-        echo "正在安装邮件发送依赖..."
-        apt-get update && apt-get install -y sendmail mailutils
-    fi
-}
-
-mail_sshkey() {
-    ck_mail
-    local PRIVATE_KEY_PATH="$1"
-    local USER_EMAIL="${2:-}"
-    if [ -z "$USER_EMAIL" ]; then
-        echo "请输入您的邮箱地址："
-        read -r USER_EMAIL
+    if [ ! -d "$DL_SSHKEY_dir" ]; then
+        echo "❌ 目录不存在：$DL_SSHKEY_dir"
+        return 1
     fi
 
-    if [ -n "$USER_EMAIL" ]; then
-        echo "附件中是您的 SSH 私钥文件，请妥善保管。" | mail -s "SSH 私钥文件" -A "$PRIVATE_KEY_PATH" "$USER_EMAIL"
-        echo "SSH 私钥已发送到 $USER_EMAIL。如果收件箱未找到请查看垃圾箱。"
-    else
-        echo "邮箱地址不能为空，请重新运行脚本。"
-    fi
-}
-
-mail_test() {
-    ck_mail
-    local USER_EMAIL="${1:-}"
-    if [ -z "$USER_EMAIL" ]; then
-        echo "请输入您的邮箱地址："
-        read -r USER_EMAIL
+    # 检查 curl 是否可用
+    if ! command -v curl &> /dev/null; then
+        echo "❌ 错误: curl 命令未安装，无法发送 Webhook 请求。"
+        echo "请安装 curl: apt-get install -y curl"
+        return 1
     fi
 
-    if [ -n "$USER_EMAIL" ]; then
-        echo "这是一个邮箱测试文件请不需要回复。" | mail -s "邮箱测试" "$USER_EMAIL"
-        echo "邮箱测试文件已发送到 $USER_EMAIL。如果收件箱未找到请查看垃圾箱。"
-    else
-        echo "邮箱地址不能为空，请重新运行脚本。"
-    fi
+    # 使用 null 分隔符安全处理文件名（含空格/特殊字符）
+    local sent_count=0
+    local failed_count=0
+
+    echo "🌐 开始通过 Webhook 发送密钥文件..."
+    while IFS= read -r -d '' file; do
+        if [ -f "$file" ]; then
+            filename=$(basename "$file")
+            # 从文件名提取时间戳和邮箱地址 (假设格式为 timestamp_email)
+            local extracted_info=$(echo "$filename" | sed 's/\([^_]*\)_\(.*\)/\1 \2/')
+            local timestamp=$(echo "$extracted_info" | awk '{print $1}')
+            local user_email=$(echo "$extracted_info" | awk '{print $2}')
+
+            if [ -n "$timestamp" ] && [ -n "$user_email" ] && validate_email "$user_email"; then
+                 # 读取私钥文件内容
+                 private_key_content=$(cat "$file")
+
+                 # 构造 JSON 载荷
+                 local json_payload="{\"action\": \"new_ssh_key\", \"user_email\": \"$user_email\", \"timestamp\": \"$timestamp\", \"private_key\": $(printf '%s\n' "$private_key_content" | jq -Rs .)}"
+                 # echo "DEBUG PAYLOAD: $json_payload" # For debugging
+
+                 echo "📤 正在发送给 $user_email (时间戳: $timestamp) ..."
+                 # 发送 POST 请求到 Webhook URL
+                 if response_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST -H "Content-Type: application/json" -d "$json_payload" "$WEBHOOK_URL"); then
+                     if [ "$response_code" -eq 200 ]; then
+                         echo "✅ Webhook 发送成功至 $user_email (HTTP $response_code)"
+                         rm -f "$file" # 删除已发送的文件
+                         ((sent_count++))
+                     else
+                         echo "❌ Webhook 接收方返回错误 HTTP 状态码: $response_code"
+                         ((failed_count++))
+                     fi
+                 else
+                     echo "❌ Webhook 请求失败: $user_email (时间戳: $timestamp)"
+                     ((failed_count++))
+                 fi
+            else
+                echo "⚠️  跳过无效的文件名格式或邮箱：$filename"
+                ((failed_count++))
+            fi
+        fi
+    done < <(find "$DL_SSHKEY_dir" -maxdepth 1 -type f -print0)
+
+    echo ""
+    echo "=== Webhook 发送统计 ==="
+    echo "✅ 成功发送：$sent_count 个"
+    echo "❌ 发送失败：$failed_count 个"
+    echo "🗂️  目录剩余文件数：$(find "$DL_SSHKEY_dir" -maxdepth 1 -type f | wc -l)"
 }
 
 restart_sshd(){
@@ -257,46 +281,12 @@ restart_sshd(){
 }
 
 # mailto 模式：自动发送目录中的私钥文件给用户邮箱，然后删除文件
+# (已废弃)
 send_keys_by_mail() {
-    ck_mail
-
-    if [ ! -d "$DL_SSHKEY_dir" ]; then
-        echo "❌ 目录不存在：$DL_SSHKEY_dir"
-        return 1
-    fi
-
-    # 使用 null 分隔符安全处理文件名（含空格/特殊字符）
-    local sent_count=0
-    local failed_count=0
-
-    echo "📧 开始发送密钥文件..."
-    while IFS= read -r -d '' file; do
-        if [ -f "$file" ]; then
-            filename=$(basename "$file")
-            user_email=$(echo "$filename" | sed 's/^[0-9]*_//')
-
-            if validate_email "$user_email"; then
-                echo "📤 正在发送给 $user_email ..."
-                if mail -s "SSH私钥文件 - 请妥善保管" "$user_email" < "$file" 2>/dev/null; then
-                    echo "✅ 成功发送至 $user_email"
-                    rm -f "$file"
-                    ((sent_count++))
-                else
-                    echo "❌ 发送失败：$user_email"
-                    ((failed_count++))
-                fi
-            else
-                echo "⚠️  跳过无效的邮箱格式：$user_email"
-                ((failed_count++))
-            fi
-        fi
-    done < <(find "$DL_SSHKEY_dir" -maxdepth 1 -type f -print0)
-
-    echo ""
-    echo "=== 邮件发送统计 ==="
-    echo "✅ 成功发送：$sent_count 个"
-    echo "❌ 发送失败：$failed_count 个"
-    echo "🗂️  目录剩余文件数：$(find "$DL_SSHKEY_dir" -maxdepth 1 -type f | wc -l)"
+    echo "❌ mailto 模式已弃用，请使用 webhook 模式。"
+    # ck_mail # 不再需要邮件依赖
+    # ... (移除旧的邮件发送逻辑)
+    return 1
 }
 
 set_hosts(){
@@ -424,8 +414,15 @@ main() {
         "set_hosts")
             set_hosts
             ;;
+        # --- 替换：webhook 模式 ---
+        "webhook")
+            send_keys_by_webhook
+            ;;
+        # --- 废弃：mailto 模式 ---
         "mailto")
-            send_keys_by_mail
+            echo "❌ 错误: 'mailto' 模式已弃用。请使用 'webhook' 模式。"
+            echo "   请设置 WEBHOOK_URL 环境变量并运行: $0 webhook"
+            exit 1
             ;;
         # --- 新增：agent 模式 ---
         "agent")
@@ -437,11 +434,15 @@ main() {
             echo "setRootKey_Cli usrkey"
             echo "setRootKey_Cli sshd"
             echo "setRootKey_Cli set_hosts"
-            echo "setRootKey_Cli mailto"
+            # --- 替换：帮助信息 ---
+            echo "setRootKey_Cli webhook  # 通过 Webhook 发送下载目录中的私钥文件 (需要 WEBHOOK_URL 环境变量)"
+            # --- 废弃：帮助信息 ---
+            # echo "setRootKey_Cli mailto"
             # --- 新增：帮助信息 ---
             echo "setRootKey_Cli agent  # 创建 agentuser-N 并生成其专用密钥对"
             echo ""
             echo "环境变量：SSHKEY_EMAIL=user@example.com 可跳过交互输入"
+            echo "环境变量：WEBHOOK_URL='your_webhook_url' 用于 webhook 模式"
             exit 1
             ;;
     esac
