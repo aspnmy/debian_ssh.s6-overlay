@@ -5,11 +5,13 @@ if [ "$(id -u)" -ne 0 ]; then
     echo "此脚本需要以 root 权限运行。"
     exit 1
 fi
+
 # 主要实现 对root账号登陆ssh的初始化配置
 sshd_config_dir="/etc/ssh/sshd_config"
 sshd_config_backdir="/etc/ssh/sshd_config_backup_aspnmy"
 sshkey_superman_pub="/root/.ssh/authorized_keys_superman.pub"
 DL_SSHKEY_dir="/aspnmy/wwwroot/ssh_key"
+
 # ===================== 目录自动检测 + 创建 =====================
 check_and_create_dir() {
     local dir_path="$1"
@@ -82,7 +84,7 @@ PrintMotd no
 AcceptEnv LANG LC_*
 Subsystem sftp /usr/lib/openssh/sftp-server
 PubkeyAuthentication yes
-AuthorizedKeysFile .ssh/${auth_key_file}
+AuthorizedKeysFile .ssh/%u.pub /etc/ssh/%u.pub
 SSHDEOF
     chmod 600 "$sshd_config_dir"
 }
@@ -285,6 +287,96 @@ ff02::2 ip6-allrouters
 HOSTSEOF
 }
 
+# --- 新增：获取下一个可用的 agent 编号 ---
+get_next_agent_num() {
+    local base_user="agentuser"
+    local num=1
+    while id "$base_user$num" &>/dev/null; do
+        ((num++))
+    done
+    echo $num
+}
+
+# --- 新增：Agent 用户密钥重置函数 (带编号) ---
+reset_sshd_agentkey(){
+    local BASE_AGENT_USER="agentuser"
+    local AGENT_NUM=$(get_next_agent_num)
+    local AGENT_USER="${BASE_AGENT_USER}${AGENT_NUM}"
+    local AGENT_EMAIL="${AGENT_USER}@local"
+    local AGENT_GROUP="agentgroup"
+    local AGENT_HOME="/home/$AGENT_USER"
+    local AGENT_AUTHORIZED_KEYS_FILE="authorized_keys_${AGENT_USER}.pub"
+    local AGENT_PRIVATE_KEY_PATH="$AGENT_HOME/.ssh/authorized_keys"
+    local AGENT_PUBLIC_KEY_PATH="$AGENT_PRIVATE_KEY_PATH.pub"
+
+    echo "🚀 正在为 Agent 用户 ($AGENT_USER) 生成密钥对..."
+
+    # 1. 创建用户组 (如果不存在)
+    if ! getent group "$AGENT_GROUP" > /dev/null; then
+        echo "📂 创建用户组: $AGENT_GROUP"
+        groupadd "$AGENT_GROUP"
+    else
+        echo "ℹ️  用户组 $AGENT_GROUP 已存在"
+    fi
+
+    # 2. 创建用户 (使用带编号的用户名)
+    if ! id "$AGENT_USER" &>/dev/null; then
+        echo "👤 创建用户: $AGENT_USER"
+        useradd -m -g "$AGENT_GROUP" -s /bin/bash "$AGENT_USER"
+        # 赋予 sudo 权限 (根据系统类型)
+        if [ -f /etc/debian_version ]; then
+            usermod -aG sudo "$AGENT_USER"
+        else
+            usermod -aG wheel "$AGENT_USER"
+        fi
+    else
+        echo "❌ 错误: 用户 $AGENT_USER 已存在，但脚本逻辑有误，应已被跳过。退出。"
+        exit 1
+    fi
+
+    # 3. 创建用户 .ssh 目录
+    mkdir -p "$AGENT_HOME/.ssh"
+    chown "$AGENT_USER:$AGENT_GROUP" "$AGENT_HOME/.ssh"
+    chmod 700 "$AGENT_HOME/.ssh"
+
+    # 4. 生成 Agent 密钥对
+    # 清理旧密钥
+    rm -f "$AGENT_PRIVATE_KEY_PATH" "$AGENT_PUBLIC_KEY_PATH"
+    
+    echo "🔐 生成 Agent 用户 SSH 密钥对..."
+    su - "$AGENT_USER" -c "ssh-keygen -t rsa -b 4096 -m PEM -f '$AGENT_PRIVATE_KEY_PATH' -N '' -C '$AGENT_EMAIL'" > /dev/null
+    
+    # 设置正确的权限
+    chown "$AGENT_USER:$AGENT_GROUP" "$AGENT_PUBLIC_KEY_PATH"
+    chmod 600 "$AGENT_PUBLIC_KEY_PATH"
+
+    # 5. 将 Agent 的公钥写入其对应的全局 authorized_keys 文件
+    cp "$AGENT_PUBLIC_KEY_PATH" "$sshd_config_dir/../$AGENT_AUTHORIZED_KEYS_FILE"
+    chmod 600 "$sshd_config_dir/../$AGENT_AUTHORIZED_KEYS_FILE"
+    chown root:root "$sshd_config_dir/../$AGENT_AUTHORIZED_KEYS_FILE"
+
+    # 6. 为该特定用户配置 sudo 免密白名单
+    local SUDOERS_AGENT_FILE="/etc/sudoers.d/${AGENT_USER}"
+    cat > "$SUDOERS_AGENT_FILE" <<EOF
+# 允许 $AGENT_USER 免密执行常用管理命令
+$AGENT_USER ALL=(ALL) NOPASSWD: /usr/bin/systemctl, /usr/bin/apt-get,/usr/bin/apt, /usr/bin/aptitude,/usr/bin/yum, /usr/bin/dnf, /bin/mount, /bin/umount
+EOF
+    chmod 440 "$SUDOERS_AGENT_FILE"
+    echo "✅ 已为 $AGENT_USER 配置 sudo 免密规则 (仅限常用管理命令)"
+
+    # 7. 将私钥移动到下载目录 (使用带编号的用户名标识)
+    local DL_SSHKEY_AGENT_Files="$DL_SSHKEY_dir/$(get_Time)_${AGENT_USER}"
+    mv "$AGENT_PRIVATE_KEY_PATH" "$DL_SSHKEY_AGENT_Files"
+    echo "🔑 Agent 用户 ($AGENT_USER) 的私钥已生成并移至下载目录: $DL_SSHKEY_AGENT_Files"
+    echo "📋 Agent 公钥已写入: /etc/ssh/$AGENT_AUTHORIZED_KEYS_FILE"
+
+    # 8. 重启 SSH 服务以确保配置生效
+    restart_sshd
+    echo "✅ Agent 用户 ($AGENT_USER) 密钥重置完成！请从 $DL_SSHKEY_AGENT_Files 下载私钥。"
+    echo "   ⚠️  警告: 请确保测试 Agent 用户登录和 sudo 权限正常后再断开当前会话！"
+}
+
+
 # 主函数 使用参数直接执行业务逻辑
 main() {
     case "$1" in
@@ -303,6 +395,10 @@ main() {
         "mailto")
             send_keys_by_mail
             ;;
+        # --- 新增：agent 模式 ---
+        "agent")
+            reset_sshd_agentkey
+            ;;
         *)
             echo "无效的选择。请使用以下格式运行脚本："
             echo "setRootKey_Cli superman"
@@ -310,6 +406,8 @@ main() {
             echo "setRootKey_Cli sshd"
             echo "setRootKey_Cli set_hosts"
             echo "setRootKey_Cli mailto"
+            # --- 新增：帮助信息 ---
+            echo "setRootKey_Cli agent  # 创建 agentuser-N 并生成其专用密钥对"
             echo ""
             echo "环境变量：SSHKEY_EMAIL=user@example.com 可跳过交互输入"
             exit 1
