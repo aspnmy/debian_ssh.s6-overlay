@@ -113,12 +113,38 @@ initialize_sshd_config() {
          write_sshd_config
          echo "✅ SSH 配置文件已初始化。"
     else
-         echo "ℹ️  SSH 配置文件 $sshd_config_dir 已存在，跳过初始化。如需强制重置，请设置 FORCE_CONFIG_RESET=1。"
+         echo "ℹ️  SSH 配置文件 $sshd_config_dir 已存在，正在检查并修复配置。"
          # 检查配置是否包含所需的 AuthorizedKeysFile 行
-         if ! grep -q "AuthorizedKeysFile.*\.ssh/authorized_keys.*%u" "$sshd_config_dir"; then
-             echo "⚠️  警告: $sshd_config_dir 中的 AuthorizedKeysFile 配置可能不兼容。建议手动检查或备份后重置。"
-             # 可以选择退出或继续（风险自负）
-             # exit 1
+         if ! grep -q "AuthorizedKeysFile.*\.ssh/authorized_keys.*%u" "$sshd_config_dir" && \
+            ! grep -q "AuthorizedKeysFile.*%u.*\.ssh/authorized_keys" "$sshd_config_dir"; then
+             echo "🔍 未找到兼容的 AuthorizedKeysFile 配置，正在尝试修复..."
+
+             # 备份原文件
+             backup_sshd_config
+
+             # 读取当前配置内容
+             local temp_config=$(mktemp)
+             cp "$sshd_config_dir" "$temp_config"
+
+             # 检查是否已有 AuthorizedKeysFile 行
+             if grep -q "^AuthorizedKeysFile" "$temp_config"; then
+                 # 如果有，注释掉旧行
+                 sed -i.bak 's/^\(AuthorizedKeysFile\s\+\)/#\1/' "$temp_config"
+                 echo "   - 已注释掉旧的 AuthorizedKeysFile 行。"
+             fi
+
+             # 添加新的配置行
+             echo "# --- Added by setRootKey_Cli script ---" >> "$temp_config"
+             echo "AuthorizedKeysFile .ssh/authorized_keys /etc/ssh/authorized_keys_%u.pub" >> "$temp_config"
+             echo "# -------------------------------------" >> "$temp_config"
+
+             # 替换原文件
+             mv "$temp_config" "$sshd_config_dir"
+             chmod 600 "$sshd_config_dir"
+
+             echo "✅ SSH 配置文件 $sshd_config_dir 已修复。"
+         else
+             echo "✅ SSH 配置文件 $sshd_config_dir 中的 AuthorizedKeysFile 配置已兼容。"
          fi
     fi
 }
