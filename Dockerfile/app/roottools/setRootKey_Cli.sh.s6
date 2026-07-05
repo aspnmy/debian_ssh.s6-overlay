@@ -342,24 +342,28 @@ send_keys_by_webhook() {
     while IFS= read -r -d '' file; do
         if [ -f "$file" ]; then
             filename=$(basename "$file")
-            # 从文件名提取时间戳和邮箱地址 (假设格式为 timestamp_email)
+            # 从文件名提取时间戳和用户名 (假设格式为 timestamp_username)
+            # 注意：这里不再假设第二部分是邮箱，而是用户名
             local extracted_info=$(echo "$filename" | sed 's/\([^_]*\)_\(.*\)/\1 \2/')
             local timestamp=$(echo "$extracted_info" | awk '{print $1}')
-            local user_email=$(echo "$extracted_info" | awk '{print $2}')
+            local username=$(echo "$extracted_info" | awk '{print $2}') # 修改变量名为 username
 
-            if [ -n "$timestamp" ] && [ -n "$user_email" ] && validate_email "$user_email"; then
+            # 移除 validate_email 验证，并改为检查 username 是否非空
+            # 也可以增加一个对 username 格式的简单检查，比如必须是字母数字下划线组合
+            if [ -n "$timestamp" ] && [ -n "$username" ] && [[ "$username" =~ ^[a-zA-Z0-9_-]+$ ]]; then 
                  # 读取私钥文件内容
                  private_key_content=$(cat "$file")
 
                  # 构造 JSON 载荷
-                 local json_payload="{\"action\": \"new_ssh_key\", \"user_email\": \"$user_email\", \"timestamp\": \"$timestamp\", \"private_key\": $(printf '%s\n' "$private_key_content" | jq -Rs .)}"
+                 # 注意：将 user_email 改为 username，以匹配实际用途
+                 local json_payload="{\"action\": \"new_ssh_key\", \"username\": \"$username\", \"timestamp\": \"$timestamp\", \"private_key\": $(printf '%s\n' "$private_key_content" | jq -Rs .)}"
                  # echo "DEBUG PAYLOAD: $json_payload" # For debugging
 
-                 echo "📤 正在发送给 $user_email (时间戳: $timestamp) ..."
+                 echo "📤 正在发送给 $username (时间戳: $timestamp) ..."
                  # 发送 POST 请求到 Webhook URL
                  if response_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST -H "Content-Type: application/json" -d "$json_payload" "$WEBHOOK_URL"); then
                      if [ "$response_code" -eq 200 ]; then
-                         echo "✅ Webhook 发送成功至 $user_email (HTTP $response_code)"
+                         echo "✅ Webhook 发送成功至 $username (HTTP $response_code)"
                          rm -f "$file" # 删除已发送的文件
                          ((sent_count++))
                      else
@@ -367,11 +371,13 @@ send_keys_by_webhook() {
                          ((failed_count++))
                      fi
                  else
-                     echo "❌ Webhook 请求失败: $user_email (时间戳: $timestamp)"
+                     echo "❌ Webhook 请求失败: $username (时间戳: $timestamp)"
+                     # curl 命令失败时，保留文件以便后续重试
                      ((failed_count++))
                  fi
             else
-                echo "⚠️  跳过无效的文件名格式或邮箱：$filename"
+                echo "⚠️  跳过无效的文件名格式或用户名：$filename"
+                # 如果格式不对，保留文件以便人工检查
                 ((failed_count++))
             fi
         fi
