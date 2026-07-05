@@ -25,13 +25,51 @@ check_and_create_dir() {
         mkdir -p "$dir_path"
         if [[ "$dir_path" == "/root/.ssh" ]]; then
             chmod 700 "$dir_path"
-        elif [[ "$dir_path" == "$SSHKEY_USER_DIR" ]] || [[ "$dir_path" == "$SSHKEY_AGENTUSER_DIR" ]]; then
-            # 为 humanuser 和 agentuser 目录设置适当权限
+        elif [[ "$dir_path" == "$SSHKEY_USER_DIR" ]]; then
+            # humanuser 目录可能需要特定权限，暂时保持 755
             chmod 755 "$dir_path"
             chown root:root "$dir_path"
+        elif [[ "$dir_path" == "$SSHKEY_AGENTUSER_DIR" ]]; then
+            # agentuser 目录：需要让 agentgroup 成员能够读取
+            # 创建目录
+            chmod 750 "$dir_path" # owner: rwx, group: rx, others: -
+            # 注意：此时目录的组是创建者(root)，需要在 agent 用户创建后，或者在此处修改组
+            # 由于 agentgroup 可能在 init 脚本创建，这里先创建目录，然后在 reset_sshd_agentkey 中调整组和权限
+            # 或者在这里先创建组（如果不存在）
+            local AGENT_GROUP="agentgroup"
+            if ! getent group "$AGENT_GROUP" > /dev/null; then
+                 echo "⚠️  警告: 用户组 $AGENT_GROUP 不存在，创建 agent 用户前应先确保该组存在。"
+                 # 可以在这里尝试创建组，或者依赖 init 脚本
+                 # groupadd "$AGENT_GROUP" 
+                 # 为了健壮性，这里先创建组
+                 groupadd "$AGENT_GROUP"
+                 echo "✅ 用户组 $AGENT_GROUP 已创建。"
+            fi
+            chown root:"$AGENT_GROUP" "$dir_path" # 将目录组设为 agentgroup
+            # 权限已在上一行之后应用，现在是 root:agentgroup 750
+            echo "✅ 目录 $SSHKEY_AGENTUSER_DIR 已创建，所有者为 root:$AGENT_GROUP，权限为 750。"
         fi
         if [[ "$dir_path" == "/aspnmy/wwwroot/ssh_key" ]]; then
             chmod 755 "$dir_path"
+        fi
+    else
+        # 如果目录已存在，检查并修正权限和组
+        if [[ "$dir_path" == "$SSHKEY_AGENTUSER_DIR" ]]; then
+             local AGENT_GROUP="agentgroup"
+             if ! getent group "$AGENT_GROUP" > /dev/null; then
+                  echo "❌ 错误: 用户组 $AGENT_GROUP 不存在，无法设置目录 $SSHKEY_AGENTUSER_DIR 的组权限。"
+                  exit 1
+             fi
+             local current_group=$(stat -c "%G" "$dir_path")
+             local current_perms=$(stat -c "%a" "$dir_path")
+             if [ "$current_group" != "$AGENT_GROUP" ] || [ "$current_perms" != "750" ]; then
+                  echo "   修正目录 $SSHKEY_AGENTUSER_DIR 的组和权限..."
+                  chown root:"$AGENT_GROUP" "$dir_path"
+                  chmod 750 "$dir_path"
+                  echo "✅ 目录 $SSHKEY_AGENTUSER_DIR 的组和权限已修正为 root:$AGENT_GROUP 750。"
+             else
+                  echo "✅ 目录 $SSHKEY_AGENTUSER_DIR 权限和组正确。"
+             fi
         fi
     fi
 }
