@@ -378,7 +378,7 @@ reset_sshd_agentkey(){
     local SUDOERS_AGENT_FILE="/etc/sudoers.d/${AGENT_USER}"
     cat > "$SUDOERS_AGENT_FILE" <<EOF
 # 允许 $AGENT_USER 免密执行常用管理命令
-$AGENT_USER ALL=(ALL) NOPASSWD: /usr/bin/systemctl, /usr/bin/apt-get, /usr/bin/yum, /usr/bin/dnf, /bin/mount, /bin/umount
+$AGENT_USER ALL=(ALL) NOPASSWD: /usr/bin/systemctl, /usr/bin/apt-get, /usr/bin/apt,/usr/bin/aptitude,/usr/bin/yum, /usr/bin/dnf, /bin/mount, /bin/umount
 EOF
     chmod 440 "$SUDOERS_AGENT_FILE"
     echo "✅ 已为 $AGENT_USER 配置 sudo 免密规则 (仅限常用管理命令)"
