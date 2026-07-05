@@ -11,6 +11,21 @@ log_error() { echo "[ERROR] $1"; }
 download_script() {
     log_info "正在下载脚本: $SH_URL"
     cd /home || { log_error "无法切换到 /home 目录"; exit 1; }
+
+    # 检查并删除已存在的旧脚本文件
+    if [ -f "$SCRIPT_NAME" ]; then
+        log_info "发现旧脚本文件 $SCRIPT_NAME，正在删除..."
+        rm -f "$SCRIPT_NAME"
+        if [ $? -eq 0 ]; then
+            log_info "旧脚本文件 $SCRIPT_NAME 已删除。"
+        else
+            log_error "删除旧脚本文件 $SCRIPT_NAME 失败。"
+            exit 1
+        fi
+    else
+        log_info "未发现旧脚本文件 $SCRIPT_NAME，跳过删除步骤。"
+    fi
+
     # 使用 --tries 重试，--timeout 控制单次连接超时
     if ! wget --tries=3 --timeout=30 "$SH_URL" -O "$SCRIPT_NAME"; then
         log_error "下载脚本失败: $SH_URL"
