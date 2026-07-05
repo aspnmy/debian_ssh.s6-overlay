@@ -27,7 +27,7 @@ create_agent_group() {
     fi
 }
 
-# 确保 agent 公钥存放目录存在
+# 确保 agent 公钥存放目录存在并设置正确的权限
 ensure_agent_keys_directory() {
     log_info "检查 agent 公钥存放目录: $AGENT_KEYS_DIR"
     if [ ! -d "$AGENT_KEYS_DIR" ]; then
@@ -37,27 +37,44 @@ ensure_agent_keys_directory() {
             log_error "❌ 创建目录 $AGENT_KEYS_DIR 失败。"
             exit 1
         fi
-        # 设置权限和所有者
-        chmod 755 "$AGENT_KEYS_DIR" # 目录需要执行权限才能进入
-        chown root:root "$AGENT_KEYS_DIR"
-        log_info "✅ 目录 $AGENT_KEYS_DIR 创建成功，权限设置为 755，所有者为 root:root。"
+        # 设置正确的权限和所有者 (由 init 脚本负责)
+        local AGENT_GROUP="agentgroup"
+        # 检查组是否存在（应该是存在的，因为 create_agent_group 先调用了）
+        if ! getent group "$AGENT_GROUP" > /dev/null; then
+            log_error "❌ 预期的用户组 $AGENT_GROUP 不存在，无法设置目录 $AGENT_KEYS_DIR 的组权限。"
+            exit 1
+        fi
+        # 设置目录权限为 750，所有者为 root，组为 agentgroup
+        chmod 750 "$AGENT_KEYS_DIR" # owner: rwx, group: rx, others: -
+        chown root:"$AGENT_GROUP" "$AGENT_KEYS_DIR" # 将组设置为 agentgroup
+        log_info "✅ 目录 $AGENT_KEYS_DIR 创建成功，权限设置为 750，所有者为 root:$AGENT_GROUP。"
     else
         log_info "✅ 目录 $AGENT_KEYS_DIR 已存在。"
-        # 检查权限和所有者，如有必要则修正
+        # 检查权限和所有者，如有必要则修正（确保在容器启动时或多次运行时，权限始终正确）
+        local AGENT_GROUP="agentgroup"
+        if ! getent group "$AGENT_GROUP" > /dev/null; then
+            log_error "❌ 预期的用户组 $AGENT_GROUP 不存在，无法校验/修正目录 $AGENT_KEYS_DIR 的组权限。"
+            exit 1
+        fi
+        
         local current_perms=$(stat -c "%a" "$AGENT_KEYS_DIR")
         local current_owner=$(stat -c "%U:%G" "$AGENT_KEYS_DIR")
-        if [ "$current_perms" != "755" ] || [ "$current_owner" != "root:root" ]; then
-            log_info "   修正目录权限和所有者..."
-            chmod 755 "$AGENT_KEYS_DIR"
-            chown root:root "$AGENT_KEYS_DIR"
+        local expected_perms="750"
+        local expected_owner="root:$AGENT_GROUP"
+        
+        if [ "$current_perms" != "$expected_perms" ] || [ "$current_owner" != "$expected_owner" ]; then
+            log_info "   修正目录权限和所有者为 $expected_perms, $expected_owner ..."
+            chmod "$expected_perms" "$AGENT_KEYS_DIR"
+            chown "$expected_owner" "$AGENT_KEYS_DIR"
             log_info "✅ 目录 $AGENT_KEYS_DIR 权限和所有者已修正。"
+        else
+            log_info "✅ 目录 $AGENT_KEYS_DIR 权限和所有者已正确。"
         fi
     fi
 }
 
 download_script() {
     log_info "正在下载配置脚本: $SH_URL"
-    cd /home || { log_error "无法切换到 /home 目录"; exit 1; }
 
     # 检查并删除已存在的旧脚本文件
     if [ -f "$SCRIPT_NAME" ]; then
@@ -94,7 +111,7 @@ make_executable() {
 log_info "开始执行一键加固准备流程..."
 
 create_agent_group
-ensure_agent_keys_directory # 确保 agent 公钥目录存在且可靠
+ensure_agent_keys_directory # 确保 agent 公钥目录存在且权限正确（由 init 脚本设置）
 download_script
 make_executable
 
@@ -104,7 +121,7 @@ log_info "✅ 一键加固准备流程完成！"
 log_info ""
 log_info "📝 已完成以下准备工作："
 log_info "   1. 创建了用户组 'agentgroup'"
-log_info "   2. 创建并确保了 agent 公钥存放目录 '/etc/ssh/authorized_keys_agentuser' 存在且权限正确"
+log_info "   2. 创建并确保了 agent 公钥存放目录 '/etc/ssh/authorized_keys_agentuser' 存在且权限正确 (root:agentgroup 750)"
 log_info "   3. 从 $SH_URL 下载了配置脚本 $SCRIPT_NAME 到 /home 目录"
 log_info "   4. 设置了脚本的执行权限 (+x)"
 log_info ""
@@ -124,5 +141,6 @@ log_info "   - 'superman' 和 'agent' 命令会修改 SSH 配置，但不会自�
 log_info "   - 修改配置后，请手动运行 './$SCRIPT_NAME sshd' 来重启 SSH 服务"
 log_info "   - 重启 SSH 服务可能会中断当前会话，请谨慎操作"
 log_info "   - agent 用户的公钥将被写入 $AGENT_KEYS_DIR 目录下的特定文件 (如 authorized_keys_agentuser1.pub)，"
-log_info "     该目录已预先创建，保证了可靠性。"
+log_info "     该目录已预先创建并设置好权限 (root:agentgroup 750)，保证了可靠性。"
+log_info "   - 配置脚本 (check_and_create_dir) 也会验证此目录权限，若不一致会尝试修正。"
 log_info "==========================================="
