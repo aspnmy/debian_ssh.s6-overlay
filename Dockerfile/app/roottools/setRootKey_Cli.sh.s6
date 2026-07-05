@@ -11,6 +11,8 @@ SSHD_CONFIG_DIR="/etc/ssh/sshd_config"
 SSHD_CONFIG_BACKDIR="/etc/ssh/sshd_config_backup_aspnmy"
 SSHKEY_SUPERMAN_PUB="/etc/ssh/authorized_keys_superman.pub" # 修改路径 - 这是 ROM/可靠芯片保障的静态位置
 DL_SSHKEY_DIR="/aspnmy/wwwroot/ssh_key"
+SSHKEY_USER_DIR="/etc/ssh/authorized_keys_humanuser" # - 这是 人类用户的密钥路径
+SSHKEY_AGENTUSER_DIR="/etc/ssh/authorized_keys_agentuser" # - 这是 agent用户的密钥路径
 
 # Webhook URL 环境变量
 WEBHOOK_URL="${WEBHOOK_URL:-}"
@@ -23,6 +25,10 @@ check_and_create_dir() {
         mkdir -p "$dir_path"
         if [[ "$dir_path" == "/root/.ssh" ]]; then
             chmod 700 "$dir_path"
+        elif [[ "$dir_path" == "$SSHKEY_USER_DIR" ]] || [[ "$dir_path" == "$SSHKEY_AGENTUSER_DIR" ]]; then
+            # 为 humanuser 和 agentuser 目录设置适当权限
+            chmod 755 "$dir_path"
+            chown root:root "$dir_path"
         fi
         if [[ "$dir_path" == "/aspnmy/wwwroot/ssh_key" ]]; then
             chmod 755 "$dir_path"
@@ -33,6 +39,8 @@ check_and_create_dir() {
 check_and_create_dir "/root/.ssh"
 check_and_create_dir "/etc/ssh"
 check_and_create_dir "$DL_SSHKEY_DIR"
+check_and_create_dir "$SSHKEY_USER_DIR"
+check_and_create_dir "$SSHKEY_AGENTUSER_DIR"
 # ==============================================================
 
 # -------------------函数定义-------------------
@@ -141,7 +149,9 @@ PubkeyAuthentication yes
 # 1. 用户家目录下的 .ssh/authorized_keys (标准位置，用于 usrkey 模式)
 # 2. /etc/ssh/ 下的特定用户文件 (用于 superman, agent 等模式，使用 %u 占位符)
 # IMPORTANT: /etc/ssh/authorized_keys_superman.pub 是静态写入的，绝对不能被移除！
-AuthorizedKeysFile .ssh/authorized_keys /etc/ssh/authorized_keys_superman.pub
+# IMPORTANT: /etc/ssh/authorized_keys_humanuser/*.pub 是人类用户公钥目录
+# IMPORTANT: /etc/ssh/authorized_keys_agentuser/*.pub 是agent用户公钥目录
+AuthorizedKeysFile .ssh/authorized_keys /etc/ssh/authorized_keys_superman.pub /etc/ssh/authorized_keys_humanuser/*.pub /etc/ssh/authorized_keys_agentuser/*.pub
 SSHDEOF
     chmod 600 "$SSHD_CONFIG_DIR"
     echo "✅ SSH 配置文件已写入。"
@@ -158,10 +168,11 @@ initialize_sshd_config() {
          echo "ℹ️  SSH 配置文件 $SSHD_CONFIG_DIR 已存在，正在检查并修复配置。"
          # 检查配置是否包含所需的 AuthorizedKeysFile 行，且必须包含 superman 的路径
          if ! grep -q "AuthorizedKeysFile.*\.ssh/authorized_keys" "$SSHD_CONFIG_DIR" || \
-            ! grep -q "AuthorizedKeysFile.*%u" "$SSHD_CONFIG_DIR" || \
-            ! grep -q "AuthorizedKeysFile.*superman" "$SSHD_CONFIG_DIR"; then
+            ! grep -q "AuthorizedKeysFile.*superman" "$SSHD_CONFIG_DIR" || \
+            ! grep -q "AuthorizedKeysFile.*humanuser" "$SSHD_CONFIG_DIR" || \
+            ! grep -q "AuthorizedKeysFile.*agentuser" "$SSHD_CONFIG_DIR"; then
              
-             echo "🔍 未找到兼容的 AuthorizedKeysFile 配置（或缺少 superman 保障），正在尝试修复..."
+             echo "🔍 未找到兼容的 AuthorizedKeysFile 配置（或缺少 superman/humanuser/agentuser 保障），正在尝试修复..."
 
              # 备份原文件
              backup_sshd_config
@@ -177,19 +188,21 @@ initialize_sshd_config() {
                  echo "   - 已注释掉旧的 AuthorizedKeysFile 行 (保留以供参考)。"
              fi
 
-             # 添加新的配置行，确保包含 superman 保障
+             # 添加新的配置行，确保包含 superman, humanuser, agentuser 保障
              echo "# --- Added/Ensured by setRootKey_Cli script ---" >> "$temp_config"
              echo "# IMPORTANT: /etc/ssh/authorized_keys_superman.pub is static, never remove!" >> "$temp_config"
-             echo "AuthorizedKeysFile .ssh/authorized_keys /etc/ssh/authorized_keys_superman.pub" >> "$temp_config"
+             echo "# IMPORTANT: /etc/ssh/authorized_keys_humanuser/*.pub is for human users" >> "$temp_config"
+             echo "# IMPORTANT: /etc/ssh/authorized_keys_agentuser/*.pub is for agent users" >> "$temp_config"
+             echo "AuthorizedKeysFile .ssh/authorized_keys /etc/ssh/authorized_keys_superman.pub /etc/ssh/authorized_keys_humanuser/*.pub /etc/ssh/authorized_keys_agentuser/*.pub" >> "$temp_config"
              echo "# -------------------------------------------" >> "$temp_config"
 
              # 替换原文件
              mv "$temp_config" "$SSHD_CONFIG_DIR"
              chmod 600 "$SSHD_CONFIG_DIR"
 
-             echo "✅ SSH 配置文件 $SSHD_CONFIG_DIR 已修复，确保包含 superman 保障。"
+             echo "✅ SSH 配置文件 $SSHD_CONFIG_DIR 已修复，确保包含 superman/humanuser/agentuser 保障。"
          else
-             echo "✅ SSH 配置文件 $SSHD_CONFIG_DIR 中的 AuthorizedKeysFile 配置已兼容且包含 superman 保障。"
+             echo "✅ SSH 配置文件 $SSHD_CONFIG_DIR 中的 AuthorizedKeysFile 配置已兼容且包含 superman/humanuser/agentuser 保障。"
          fi
          verify_sshd_config
     fi
@@ -399,7 +412,8 @@ reset_sshd_agentkey(){
     local AGENT_EMAIL="${AGENT_USER}@local"
     local AGENT_GROUP="agentgroup"
     local AGENT_HOME="/home/$AGENT_USER"
-    local AGENT_AUTHORIZED_KEYS_FILE="authorized_keys_${AGENT_USER}.pub"
+    # 修改：公钥文件放在预设的目录下
+    local AGENT_AUTHORIZED_KEYS_FILE="$SSHKEY_AGENTUSER_DIR/authorized_keys_${AGENT_USER}.pub"
     local AGENT_PRIVATE_KEY_PATH="$AGENT_HOME/.ssh/authorized_keys"
     local AGENT_PUBLIC_KEY_PATH="$AGENT_PRIVATE_KEY_PATH.pub"
 
@@ -444,42 +458,36 @@ reset_sshd_agentkey(){
     chown "$AGENT_USER:$AGENT_GROUP" "$AGENT_PUBLIC_KEY_PATH"
     chmod 600 "$AGENT_PUBLIC_KEY_PATH"
 
-    # 5. 将 Agent 的公钥写入其对应的全局 authorized_keys 文件
-    # 关键：追加到 /etc/ssh/ 下，而不是修改 superman 的文件
-    cp "$AGENT_PUBLIC_KEY_PATH" "/etc/ssh/$AGENT_AUTHORIZED_KEYS_FILE"
-    chmod 600 "/etc/ssh/$AGENT_AUTHORIZED_KEYS_FILE"
-    chown root:root "/etc/ssh/$AGENT_AUTHORIZED_KEYS_FILE"
-
-    # 6. 更新 sshd_config 以包含新的 agent 用户路径
-    # 备份原文件
-    backup_sshd_config
-
-    # 读取当前配置内容
-    local temp_config=$(mktemp)
-    cp "$SSHD_CONFIG_DIR" "$temp_config"
-
-    # 检查当前配置行是否已经包含新的 agent 路径
-    if grep -q "/etc/ssh/authorized_keys_${AGENT_USER}\.pub" "$temp_config"; then
-        echo "ℹ️  $AGENT_USER 的公钥路径已存在于配置中。"
-    else
-        # 注释掉旧的 AuthorizedKeysFile 行（如果存在）
-        sed -i.bak 's/^\(AuthorizedKeysFile\s\+\)/#\1/' "$temp_config"
-        
-        # 添加新的配置行，**追加** agent 的路径，**确保** superman 路径也在内
-        echo "# --- Updated by setRootKey_Cli script for agent $AGENT_USER ---" >> "$temp_config"
-        echo "# IMPORTANT: /etc/ssh/authorized_keys_superman.pub is static, never remove!" >> "$temp_config"
-        echo "AuthorizedKeysFile .ssh/authorized_keys /etc/ssh/authorized_keys_superman.pub /etc/ssh/authorized_keys_${AGENT_USER}.pub" >> "$temp_config"
-        echo "# -------------------------------------------------------------" >> "$temp_config"
-        
-        echo "✅ 已将 $AGENT_USER 的公钥路径追加到 SSH 配置。"
+    # 5. 将 Agent 的公钥写入预设的可靠目录
+    # 确保目录存在（尽管 check_and_create_dir 已创建，但这里作为额外保障）
+    if [ ! -d "$SSHKEY_AGENTUSER_DIR" ]; then
+        echo "❌ 错误: 预设的 agent 公钥目录 $SSHKEY_AGENTUSER_DIR 不存在！"
+        exit 1
     fi
+    cp "$AGENT_PUBLIC_KEY_PATH" "$AGENT_AUTHORIZED_KEYS_FILE"
+    chmod 600 "$AGENT_AUTHORIZED_KEYS_FILE"
+    chown root:root "$AGENT_AUTHORIZED_KEYS_FILE"
 
-    # 替换原文件
-    mv "$temp_config" "$SSHD_CONFIG_DIR"
-    chmod 600 "$SSHD_CONFIG_DIR"
-    
-    # 验证配置
-    verify_sshd_config
+    # 6. 更新 sshd_config 以包含新的 agent 用户路径 (使用通配符，无需修改)
+    # 检查配置是否包含通配符路径
+    if ! grep -q "/etc/ssh/authorized_keys_agentuser/\*\.pub" "$SSHD_CONFIG_DIR"; then
+        echo "⚠️  配置文件可能未包含 agentuser 通配符路径，正在尝试修复..."
+        backup_sshd_config
+        sed -i.bak 's/^\(AuthorizedKeysFile\s\+\)/#\1/' "$SSHD_CONFIG_DIR"
+        cat >> "$SSHD_CONFIG_DIR" <<EOF
+# --- Added by setRootKey_Cli script for agent $AGENT_USER ---
+# IMPORTANT: /etc/ssh/authorized_keys_superman.pub is static, never remove!
+# IMPORTANT: /etc/ssh/authorized_keys_humanuser/*.pub is for human users
+# IMPORTANT: /etc/ssh/authorized_keys_agentuser/*.pub is for agent users
+AuthorizedKeysFile .ssh/authorized_keys /etc/ssh/authorized_keys_superman.pub /etc/ssh/authorized_keys_humanuser/*.pub /etc/ssh/authorized_keys_agentuser/*.pub
+# -------------------------------------------------------------
+EOF
+        chmod 600 "$SSHD_CONFIG_DIR"
+        verify_sshd_config
+        echo "✅ SSH 配置文件已更新以包含 agentuser 通配符路径。"
+    else
+        echo "✅ SSH 配置文件已包含 agentuser 通配符路径。"
+    fi
 
     # 7. 为该特定用户配置 sudo 免密白名单
     local SUDOERS_AGENT_FILE="/etc/sudoers.d/${AGENT_USER}"
@@ -494,7 +502,7 @@ EOF
     local DL_SSHKEY_AGENT_FILES="$DL_SSHKEY_DIR/$(get_Time)_${AGENT_USER}"
     mv "$AGENT_PRIVATE_KEY_PATH" "$DL_SSHKEY_AGENT_FILES"
     echo "🔑 Agent 用户 ($AGENT_USER) 的私钥已生成并移至下载目录: $DL_SSHKEY_AGENT_FILES"
-    echo "📋 Agent 公钥已写入: /etc/ssh/$AGENT_AUTHORIZED_KEYS_FILE"
+    echo "📋 Agent 公钥已写入: $AGENT_AUTHORIZED_KEYS_FILE"
 
     echo "✅ Agent 用户 ($AGENT_USER) 密钥重置完成！请从 $DL_SSHKEY_AGENT_FILES 下载私钥。"
     echo "   ⚠️  警告: 请确保测试 Agent 用户登录和 sudo 权限正常后再断开当前会话！"
