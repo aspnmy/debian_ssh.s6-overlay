@@ -14,7 +14,7 @@ DL_SSHKEY_DIR="/aspnmy/wwwroot/ssh_key"
 SSHKEY_USER_DIR="/etc/ssh/authorized_keys_humanuser"
 SSHKEY_AGENTUSER_DIR="/etc/ssh/authorized_keys_agentuser"
 
-# --- Webhook URL 环境变量 (来自原脚本) ---
+# --- Webhook URL 环境变量 ---
 WEBHOOK_URL="${WEBHOOK_URL:-}"
 
 # ===================== 目录检测与创建 =====================
@@ -64,22 +64,19 @@ check_and_create_dir "$DL_SSHKEY_DIR"
 check_and_create_dir "$SSHKEY_USER_DIR"
 check_and_create_dir "$SSHKEY_AGENTUSER_DIR"
 
-# ===================== Webhook 推送逻辑 (还原自原脚本) =====================
+# ===================== Webhook 推送逻辑 =====================
 send_keys_by_webhook() {
-    # 1. 检查环境变量
     if [ -z "$WEBHOOK_URL" ]; then
         echo "❌ 错误: 环境变量 WEBHOOK_URL 未设置。"
         echo "请使用 export WEBHOOK_URL='your_webhook_url_here' 设置。"
         return 1
     fi
 
-    # 2. 检查目录是否存在
     if [ ! -d "$DL_SSHKEY_DIR" ]; then
         echo "❌ 目录不存在：$DL_SSHKEY_DIR"
         return 1
     fi
 
-    # 3. 检查依赖命令
     if ! command -v curl &> /dev/null; then
         echo "❌ 错误: curl 命令未安装。"
         return 1
@@ -93,25 +90,20 @@ send_keys_by_webhook() {
     local failed_count=0
     echo "🌐 开始通过 Webhook 发送密钥文件..."
 
-    # 4. 遍历目录下的私钥文件
     while IFS= read -r -d '' file; do
         if [ -f "$file" ]; then
             filename=$(basename "$file")
-            # 提取时间戳和用户名
             local extracted_info=$(echo "$filename" | sed 's/\([^_]*\)_\(.*\)/\1 \2/')
             local timestamp=$(echo "$extracted_info" | awk '{print $1}')
             local username=$(echo "$extracted_info" | awk '{print $2}')
 
-            # 5. 校验并构造 JSON
             if [ -n "$timestamp" ] && [ -n "$username" ] && [[ "$username" =~ ^[a-zA-Z0-9_-]+$ ]]; then
                 private_key_content=$(cat "$file")
-                # 使用 jq 安全转义
                 local json_payload=$(jq -n \
                     --arg msg "【${username}】-【${private_key_content}】" \
                     '{ "msgtype": "text", "text": { "content": $msg } }')
 
                 echo "📤 正在发送给 $username ..."
-                # 6. 发送 POST 请求
                 if response_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
                     -H "Content-Type: application/json" \
                     -d "$json_payload" \
@@ -119,7 +111,7 @@ send_keys_by_webhook() {
 
                     if [ "$response_code" -eq 200 ]; then
                         echo "✅ Webhook 发送成功至 $username (HTTP 200)"
-                        rm -f "$file" # 删除已发送的文件
+                        rm -f "$file"
                         ((sent_count++))
                     else
                         echo "❌ Webhook 返回错误: $response_code"
@@ -141,40 +133,7 @@ send_keys_by_webhook() {
     echo "❌ 失败: $failed_count"
 }
 
-# ===================== 追加配置函数 (支持 Human + Agent) =====================
-append_sshd_config_line() {
-    local human_user="$1"
-    local agent_user="$2"
-    
-    if [ -z "$human_user" ] || [ -z "$agent_user" ]; then
-        echo "❌ 参数错误。"
-        return 1
-    fi
-
-    # 定义配置行
-    local HUMAN_LINE="AuthorizedKeysFile /etc/ssh/authorized_keys_humanuser/$human_user.pub"
-    local AGENT_LINE="AuthorizedKeysFile /etc/ssh/authorized_keys_agentuser/$agent_user.pub"
-
-    # 追加 Human
-    if grep -Fxq "$HUMAN_LINE" "$SSHD_CONFIG_DIR"; then
-        echo "ℹ️ Human 配置已存在: $HUMAN_LINE"
-    else
-        echo "$HUMAN_LINE" >> "$SSHD_CONFIG_DIR"
-        echo "✅ 追加 Human 配置: $HUMAN_LINE"
-    fi
-
-    # 追加 Agent
-    if grep -Fxq "$AGENT_LINE" "$SSHD_CONFIG_DIR"; then
-        echo "ℹ️ Agent 配置已存在: $AGENT_LINE"
-    else
-        echo "$AGENT_LINE" >> "$SSHD_CONFIG_DIR"
-        echo "✅ 追加 Agent 配置: $AGENT_LINE"
-    fi
-
-    chmod 600 "$SSHD_CONFIG_DIR"
-}
-
-# ===================== 其他辅助函数 =====================
+# ===================== 辅助函数 =====================
 backup_sshd_config(){
     if [ -f "$SSHD_CONFIG_DIR" ]; then
         cp "$SSHD_CONFIG_DIR" "$SSHD_CONFIG_BACKDIR"
@@ -214,13 +173,11 @@ ensure_superman_key_exists() {
     fi
 }
 
-# ===================== 业务逻辑函数 =====================
-
 initialize_sshd_config() {
     if [ ! -f "$SSHD_CONFIG_DIR" ]; then
         cat > "$SSHD_CONFIG_DIR" <<'EOF'
 Port 622
-Port 72Up
+Port 722
 Port 1222
 PermitRootLogin yes
 PasswordAuthentication yes
@@ -238,6 +195,17 @@ EOF
     fi
 }
 
+get_next_agent_num() {
+    local base_user="agentuser"
+    local num=1
+    while id "$base_user$num" &>/dev/null; do
+        ((num++))
+    done
+    echo $num
+}
+
+# ===================== 业务逻辑函数 =====================
+
 reset_sshd_superman(){
     echo "🔄 重置超级用户..."
     ensure_superman_key_exists
@@ -249,16 +217,6 @@ reset_sshd_superman(){
     echo "✅ 超级用户公钥重置完成"
 }
 
-get_next_agent_num() {
-    local base_user="agentuser"
-    local num=1
-    while id "$base_user$num" &>/dev/null; do
-        ((num++))
-    done
-    echo $num
-}
-
-# 重置 Agent 并推送 Webhook
 reset_sshd_agentkey(){
     local BASE_AGENT_USER="agentuser"
     local AGENT_NUM=$(get_next_agent_num)
@@ -304,19 +262,24 @@ EOF
     echo "✅ Agent 用户 ($AGENT_USER) 配置完成！"
     echo "🔑 私钥路径: $DL_SSHKEY_AGENT_FILES"
 
-    # --- 调用 Webhook 推送 ---
-    echo "📤 正在通过 Webhook 推送私钥..."
+    # 📤 调用 Webhook 推送私钥
     send_keys_by_webhook
 
-    # --- 追加配置 ---
-    append_sshd_config_line "humanuser1" "$AGENT_USER"
+    # ✅ 仅追加当前 Agent 的配置
+    local AGENT_LINE="AuthorizedKeysFile /etc/ssh/authorized_keys_agentuser/$AGENT_USER.pub"
+    if grep -Fxq "$AGENT_LINE" "$SSHD_CONFIG_DIR"; then
+        echo "ℹ️ Agent 配置已存在: $AGENT_LINE"
+    else
+        echo "$AGENT_LINE" >> "$SSHD_CONFIG_DIR"
+        echo "✅ 追加 Agent 配置: $AGENT_LINE"
+    fi
+    chmod 600 "$SSHD_CONFIG_DIR"
 }
 
-# 新增：重置 Human User
 reset_sshd_humankey(){
     local HUMAN_USER="$1"
     if [ -z "$HUMAN_USER" ]; then
-        echo "❌ 错误: 请提供 Human 用户名。"
+        echo "❌ 错误: 请提供 Human 用户名。用法: $0 human <username>"
         exit 1
     fi
 
@@ -335,22 +298,34 @@ reset_sshd_humankey(){
     chown root:root "$HUMAN_GLOBAL_KEY_PATH"
     chmod 600 "$HUMAN_GLOBAL_KEY_PATH"
 
+    # ✅ 追加 Human 配置
+    local HUMAN_LINE="AuthorizedKeysFile /etc/ssh/authorized_keys_humanuser/$HUMAN_USER.pub"
+    if grep -Fxq "$HUMAN_LINE" "$SSHD_CONFIG_DIR"; then
+        echo "ℹ️ Human 配置已存在: $HUMAN_LINE"
+    else
+        echo "$HUMAN_LINE" >> "$SSHD_CONFIG_DIR"
+        echo "✅ 追加 Human 配置: $HUMAN_LINE"
+    fi
+
+    # 💡 可选：询问是否同时追加最新 Agent 配置
     local AGENT_NUM=$(get_next_agent_num)
     local LATEST_AGENT_USER="agentuser$((AGENT_NUM - 1))"
-    [ "$LATEST_AGENT_USER" == "agentuser0" ] && LATEST_AGENT_USER="agentuser1"
+    
+    if [ "$LATEST_AGENT_USER" != "agentuser0" ]; then
+        read -p "❓ 是否同时追加最新 Agent ($LATEST_AGENT_USER) 的配置？(y/n): " confirm
+        if [[ "$confirm" =~ ^[Yy]$ ]]; then
+            local AGENT_LINE="AuthorizedKeysFile /etc/ssh/authorized_keys_agentuser/$LATEST_AGENT_USER.pub"
+            if ! grep -Fxq "$AGENT_LINE" "$SSHD_CONFIG_DIR"; then
+                echo "$AGENT_LINE" >> "$SSHD_CONFIG_DIR"
+                echo "✅ 追加 Agent 配置: $AGENT_LINE"
+            fi
+        fi
+    fi
 
-    # --- 追加配置 ---
-    append_sshd_config_line "$HUMAN_USER" "$LATEST_AGENT_USER"
-
-    # --- 调用 Webhook (如果生成了新文件) ---
-    # 注意：Human 逻辑根据实际情况决定是否推送 Webhook
-    # 这里假设 humanuser 的公钥是预置的，不需要推送私钥
-    # 如果需要推送通知，可以在这里添加 send_keys_by_webhook 的逻辑
-
+    chmod 600 "$SSHD_CONFIG_DIR"
     echo "✅ Human 用户 ($HUMAN_USER) 配置完成！"
 }
 
-# ===================== 重启 SSH 服务 =====================
 restart_sshd(){
     echo "🔄 重启 SSH 服务..."
     if [ -f "/etc/s6-overlay/s6-rc.d/sshd/run" ]; then
@@ -389,9 +364,9 @@ main() {
             ;;
         *)
             echo "用法: $0 {superman|agent|human|sshd|webhook}"
+            echo "  agent          - 创建 Agent 用户 + 推送 Webhook + 追加 Agent 配置"
+            echo "  human <user>   - 追加指定 Human 用户配置 (可选关联最新 Agent)"
             echo "  superman       - 重置超级用户"
-            echo "  agent          - 创建 Agent 用户并推送 Webhook"
-            echo "  human <user>   - 配置 Human 用户"
             echo "  sshd           - 重启 SSH"
             echo "  webhook        - 手动推送下载目录中的密钥"
             exit 1
@@ -399,5 +374,4 @@ main() {
     esac
 }
 
-# 启动
 main "$@"
