@@ -2,6 +2,7 @@
 
 # --- 配置 ---
 SH_URL="https://raw.githubusercontent.com/aspnmy/debian_ssh.s6-overlay/refs/heads/baseimage/Dockerfile/app/roottools/setRootKey_Cli.sh.s6"
+SH_CN_URL="https://git.t2be.cn/aspnmy/debian_ssh.s6-overlay/raw/branch/baseimage/Dockerfile/app/roottools/setRootKey_Cli.sh.s6"
 SCRIPT_NAME="setRootKey_Cli.sh.s6"
 # 预设 agent 公钥存放目录
 AGENT_KEYS_DIR="/etc/ssh/authorized_keys_agentuser"
@@ -15,20 +16,22 @@ show_menu() {
     echo "==========================================="
     echo "           Init Script Menu              "
     echo "==========================================="
-    echo "1. 更新配置脚本 ($SCRIPT_NAME)"
-    echo "2. 设置 Agent 用户组 (创建组和目录)"
-    echo "3. 查看当前 Agent 用户数量"
-    echo "4. 运行原始初始化流程 (下载/设置脚本)"
-    echo "5. 退出"
+    echo "1. 更新配置脚本-github ($SCRIPT_NAME)"
+    echo "2. 更新配置脚本-国内 ($SCRIPT_NAME)"
+    echo "3. 设置 Agent 用户组 (创建组和目录)"
+    echo "4. 查看当前 Agent 用户数量"
+    echo "5. 运行原始初始化流程 (下载/设置脚本)"
+    echo "0. 退出"
     echo "==========================================="
     read -p "请选择操作 (1-5): " choice
 
     case $choice in
         1) update_script ;;
-        2) setup_agent_group_menu ;;
-        3) list_agent_users ;;
-        4) run_original_flow ;;
-        5) exit 0 ;;
+        2) update_script_cn ;;
+        3) setup_agent_group_menu ;;
+        4) list_agent_users ;;
+        5) run_original_flow ;;
+        0) exit 0 ;;
         *) echo "❌ 无效选项，请重新选择。"; show_menu ;;
     esac
 }
@@ -40,7 +43,13 @@ update_script() {
     log_info "✅ 配置脚本更新完成！"
     show_menu
 }
-
+update_script_cn() {
+    log_info "开始更新配置脚本..."
+    download_script_cn
+    make_executable
+    log_info "✅ 配置脚本更新完成！"
+    show_menu
+}
 setup_agent_group_menu() {
     log_info "开始设置 Agent 用户组..."
     create_agent_group
@@ -191,6 +200,30 @@ download_script() {
     # 使用 --tries 重试，--timeout 控制单次连接超时
     if ! wget --tries=3 --timeout=30 "$SH_URL" -O "$SCRIPT_NAME"; then
         log_error "下载脚本失败: $SH_URL"
+        exit 1
+    fi
+    log_info "✅ 脚本下载成功: $SCRIPT_NAME"
+}
+download_script_cn() {
+    log_info "正在下载配置脚本: $SH_CN_URL"
+
+    # 检查并删除已存在的旧脚本文件
+    if [ -f "$SCRIPT_NAME" ]; then
+        log_info "发现旧脚本文件 $SCRIPT_NAME，正在删除..."
+        rm -f "$SCRIPT_NAME"
+        if [ $? -eq 0 ]; then
+            log_info "旧脚本文件 $SCRIPT_NAME 已删除。"
+        else
+            log_error "删除旧脚本文件 $SCRIPT_NAME 失败。"
+            exit 1
+        fi
+    else
+        log_info "未发现旧脚本文件 $SCRIPT_NAME，跳过删除步骤。"
+    fi
+
+    # 使用 --tries 重试，--timeout 控制单次连接超时
+    if ! wget --tries=3 --timeout=30 "$SH_CN_URL" -O "$SCRIPT_NAME"; then
+        log_error "下载脚本失败: $SH_CN_URL"
         exit 1
     fi
     log_info "✅ 脚本下载成功: $SCRIPT_NAME"
