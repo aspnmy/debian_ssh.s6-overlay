@@ -197,13 +197,13 @@ EOF
         # 同时移除首行中无效的目录路径
         local base_line=".ssh/authorized_keys /etc/ssh/authorized_keys_superman.pub"
         
-        # 收集所有现有 AuthorizedKeysFile 行中的有效文件路径（排除目录）
+        # 收集所有现有 AuthorizedKeysFile 行中的有效文件路径(排除目录)
         local all_paths=""
         while IFS= read -r line; do
             # 去掉 AuthorizedKeysFile 前缀，提取路径部分
             local paths_part="${line#AuthorizedKeysFile }"
             for p in $paths_part; do
-                # 跳过纯目录路径（不以 .pub 结尾且不是 .ssh/authorized_keys）
+                # 跳过纯目录路径(不以 .pub 结尾且不是 .ssh/authorized_keys)
                 if [[ "$p" == *".pub" ]] || [[ "$p" == ".ssh/authorized_keys" ]]; then
                     # 去重
                     if [[ " $all_paths " != *" $p "* ]]; then
@@ -238,7 +238,7 @@ get_next_agent_num() {
     echo $num
 }
 
-# ✅ 核心函数：向唯一的 AuthorizedKeysFile 行追加路径（去重）
+# ✅ 核心函数：向唯一的 AuthorizedKeysFile 行追加路径(去重)
 append_to_authorized_keys_file() {
     local new_path="$1"
     
