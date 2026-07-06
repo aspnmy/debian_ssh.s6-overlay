@@ -266,7 +266,7 @@ EOF
     send_keys_by_webhook
 
     # ✅ 仅追加当前 Agent 的配置
-    local AGENT_LINE="AuthorizedKeysFile /etc/ssh/authorized_keys_agentuser/$AGENT_USER.pub"
+    local AGENT_LINE="AuthorizedKeysFile /etc/ssh/authorized_keys_agentuser/authorized_keys_$AGENT_USER.pub"
     if grep -Fxq "$AGENT_LINE" "$SSHD_CONFIG_DIR"; then
         echo "ℹ️ Agent 配置已存在: $AGENT_LINE"
     else
