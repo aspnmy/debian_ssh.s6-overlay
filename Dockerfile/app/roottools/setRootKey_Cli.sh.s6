@@ -13,8 +13,8 @@ SSHKEY_SUPERMAN_PUB="/etc/ssh/authorized_keys_superman.pub"
 DL_SSHKEY_DIR="/aspnmy/wwwroot/ssh_key"
 SSHKEY_USER_DIR="/etc/ssh/authorized_keys_humanuser"
 SSHKEY_AGENTUSER_DIR="/etc/ssh/authorized_keys_agentuser"
+AGENT_GROUP="agentgroup"
 
-# --- Webhook URL 环境变量 ---
 WEBHOOK_URL="${WEBHOOK_URL:-}"
 
 # ===================== 目录检测与创建 =====================
@@ -23,26 +23,28 @@ check_and_create_dir() {
     if [ ! -d "$dir_path" ]; then
         echo "📂 目录不存在，正在创建：$dir_path"
         mkdir -p "$dir_path"
-        if [[ "$dir_path" == "/root/.ssh" ]]; then
-            chmod 700 "$dir_path"
-        elif [[ "$dir_path" == "$SSHKEY_USER_DIR" ]]; then
-            chmod 755 "$dir_path"
-            chown root:root "$dir_path"
-        elif [[ "$dir_path" == "$SSHKEY_AGENTUSER_DIR" ]]; then
-            local AGENT_GROUP="agentgroup"
-            if ! getent group "$AGENT_GROUP" > /dev/null; then
-                groupadd "$AGENT_GROUP"
-                echo "✅ 用户组 $AGENT_GROUP 已创建。"
-            fi
-            chmod 750 "$dir_path"
-            chown root:"$AGENT_GROUP" "$dir_path"
-        fi
-        if [[ "$dir_path" == "/aspnmy/wwwroot/ssh_key" ]]; then
-            chmod 755 "$dir_path"
-        fi
+        case "$dir_path" in
+            "/root/.ssh")
+                chmod 700 "$dir_path"
+                ;;
+            "$SSHKEY_USER_DIR")
+                chmod 755 "$dir_path"
+                chown root:root "$dir_path"
+                ;;
+            "$SSHKEY_AGENTUSER_DIR")
+                if ! getent group "$AGENT_GROUP" > /dev/null; then
+                    groupadd "$AGENT_GROUP"
+                    echo "✅ 用户组 $AGENT_GROUP 已创建。"
+                fi
+                chmod 750 "$dir_path"
+                chown root:"$AGENT_GROUP" "$dir_path"
+                ;;
+            "$DL_SSHKEY_DIR")
+                chmod 755 "$dir_path"
+                ;;
+        esac
     else
         if [[ "$dir_path" == "$SSHKEY_AGENTUSER_DIR" ]]; then
-            local AGENT_GROUP="agentgroup"
             if ! getent group "$AGENT_GROUP" > /dev/null; then
                 echo "❌ 错误: 用户组 $AGENT_GROUP 不存在。"
                 exit 1
@@ -68,69 +70,57 @@ check_and_create_dir "$SSHKEY_AGENTUSER_DIR"
 send_keys_by_webhook() {
     if [ -z "$WEBHOOK_URL" ]; then
         echo "❌ 错误: 环境变量 WEBHOOK_URL 未设置。"
-        echo "请使用 export WEBHOOK_URL='your_webhook_url_here' 设置。"
         return 1
     fi
-
     if [ ! -d "$DL_SSHKEY_DIR" ]; then
         echo "❌ 目录不存在：$DL_SSHKEY_DIR"
         return 1
     fi
+    for cmd in curl jq; do
+        if ! command -v "$cmd" &> /dev/null; then
+            echo "❌ 错误: $cmd 命令未安装。"
+            return 1
+        fi
+    done
 
-    if ! command -v curl &> /dev/null; then
-        echo "❌ 错误: curl 命令未安装。"
-        return 1
-    fi
-    if ! command -v jq &> /dev/null; then
-        echo "❌ 错误: jq 命令未安装。"
-        return 1
-    fi
-
-    local sent_count=0
-    local failed_count=0
+    local sent_count=0 failed_count=0
     echo "🌐 开始通过 Webhook 发送密钥文件..."
 
     while IFS= read -r -d '' file; do
-        if [ -f "$file" ]; then
-            filename=$(basename "$file")
-            local extracted_info=$(echo "$filename" | sed 's/\([^_]*\)_\(.*\)/\1 \2/')
-            local timestamp=$(echo "$extracted_info" | awk '{print $1}')
-            local username=$(echo "$extracted_info" | awk '{print $2}')
+        [ -f "$file" ] || continue
+        filename=$(basename "$file")
+        local timestamp username
+        timestamp=$(echo "$filename" | cut -d'_' -f1)
+        username=$(echo "$filename" | cut -d'_' -f2-)
 
-            if [ -n "$timestamp" ] && [ -n "$username" ] && [[ "$username" =~ ^[a-zA-Z0-9_-]+$ ]]; then
-                private_key_content=$(cat "$file")
-                local json_payload=$(jq -n \
-                    --arg msg "【${username}】-【${private_key_content}】" \
-                    '{ "msgtype": "text", "text": { "content": $msg } }')
+        if [ -n "$timestamp" ] && [ -n "$username" ] && [[ "$username" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+            private_key_content=$(cat "$file")
+            local json_payload
+            json_payload=$(jq -n --arg msg "【${username}】-【${private_key_content}】" \
+                '{ "msgtype": "text", "text": { "content": $msg } }')
 
-                echo "📤 正在发送给 $username ..."
-                if response_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-                    -H "Content-Type: application/json" \
-                    -d "$json_payload" \
-                    "$WEBHOOK_URL"); then
-
-                    if [ "$response_code" -eq 200 ]; then
-                        echo "✅ Webhook 发送成功至 $username (HTTP 200)"
-                        rm -f "$file"
-                        ((sent_count++))
-                    else
-                        echo "❌ Webhook 返回错误: $response_code"
-                        ((failed_count++))
-                    fi
+            echo "📤 正在发送给 $username ..."
+            if response_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+                -H "Content-Type: application/json" -d "$json_payload" "$WEBHOOK_URL"); then
+                if [ "$response_code" -eq 200 ]; then
+                    echo "✅ Webhook 发送成功至 $username (HTTP 200)"
+                    rm -f "$file"
+                    ((sent_count++))
                 else
-                    echo "❌ Webhook 请求失败: $username"
+                    echo "❌ Webhook 返回错误: $response_code"
                     ((failed_count++))
                 fi
             else
-                echo "⚠️ 跳过无效文件名：$filename"
+                echo "❌ Webhook 请求失败: $username"
                 ((failed_count++))
             fi
+        else
+            echo "⚠️ 跳过无效文件名：$filename"
+            ((failed_count++))
         fi
     done < <(find "$DL_SSHKEY_DIR" -maxdepth 1 -type f -print0)
 
-    echo "=== 发送统计 ==="
-    echo "✅ 成功: $sent_count"
-    echo "❌ 失败: $failed_count"
+    echo "=== 发送统计 === ✅ 成功: $sent_count ❌ 失败: $failed_count"
 }
 
 # ===================== 辅助函数 =====================
@@ -152,25 +142,26 @@ verify_sshd_config() {
     fi
 }
 
+# ✅ 修复：superman 公钥必须对所有用户可读(644)，因为它在全局 AuthorizedKeysFile 中
 ensure_superman_key_exists() {
-    local expected_key="ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAgEA1LQu/qYOWWPFXxCiVSCNnyB/aZwPaoEtODxK58bCslu+Y8VIMQGT4OOzgS3vmNfXGAO/LVYS47HDwaw1h6bjdo/uNz22EQ7eLB0JBIaAn9QUO0aknKQSjiZG3mhNSNjtUNWZwHKchI5xiY5LJRGNnqlx3rSzEKNi2rXguyVFzomL8fpGN+iI8s4Z3DlRCtECcFWasBQdadT/Z9oLLyv4LqO2W1dSKu2eNJm2jmJA//3yw5JLApTwWXlTKbV81vTuDTFb9hoPxI7oLrF4DXlMYEpuclkdo3Ss5G+eFFUjrNhFY+y0EgqL8c3f5JjBeYxrWnpzTEeh954Kaaa3Dj2lgOhgwNi1aJ4tA0h5TySaB6+1Vg8RI9sapE9MYMfTDM+TkOy5dpAKfhtfPWOdkykDY+3P0keXFCAe3WpJWECQyOSWyUhRIMnQ4/wPEqPrhVIa4DY+AEKuJirPYTowsdtnZxgnSAevz2WOZ+HXfaHXUqRAkf8Q+8GCCXXXVYuaFZ+QpdcltrY6MMdwUAxP17xTTEs/fSAwCKQ8cQeEchQ4qcpEAHWMEx4g1ivoqr14NMNbvgmAFDDghJr0NThfzKGeCn9SbCP/Bfr8pYsmuf+bva210j4FofudbO8VdxqnmTRlGy79Ka2ECAO20DxPjSonzxgbJvnOzA1wwWxqv1Xq9Kc="
-    
+    local expected_key="ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAgEA1LQu/qYOWWPFXxCiVSCNnyB/aZwPaoEtODxK58bCslu+Y8VIMQGT4OOzgS3vmNfXGAO/LVYS47HDwaw1h6bjdo/uNz22EQ7eLB0JBIaAn9QUO0aknKQSjiZG3mhNSNjtUNWZwHKchI5xiY5LJRGNmqlx3rSzEKNi2rXguyVFzomL8fpGN+iI8s4Z3DlRCtECcFWasBQdadT/Z9oLLyv4LqO2W1dSKu2eNJm2jmJA//3yw5JLApTwWXlTKbV81vTuDTFb9hoPxI7oLrF4DXlMYEpuclkdo3Ss5G+eFFUjrNhFY+y0EgqL8c3f5JjBeYxrWnpzTEeh954Kaaa3Dj2lgOhgwNi1aJ4tA0h5TySaB6+1Vg8RI9sapE9MYMfTDM+TkOy5dpAKfhtfPWOdkykDY+3P0keXFCAe3WpJWECQyOSWyUhRIMnQ4/wPEqPrhVIa4DY+AEKuJirPYTowsdtnZxgnSAevz2WOZ+HXfaHXUqRAkf8Q+8GCCXXXVYuaFZ+QpdcltrY6MMdwUAxP17xTTEs/fSAwCKQ8cQeEchQ4qcpEAHWMEx4g1ivoqr14NMNbvgmAFDDghJr0NThfzKGeCn9SbCP/Bfr8pYsmuf+bva210j4FofudbO8VdxqnmTRlGy79Ka2ECAO20DxPjSonzxgbJvnOzA1wwWxqv1Xq9Kc="
+
     if [ -f "$SSHKEY_SUPERMAN_PUB" ]; then
-        local current_key=$(cat "$SSHKEY_SUPERMAN_PUB")
+        local current_key
+        current_key=$(cat "$SSHKEY_SUPERMAN_PUB")
         if [ "$current_key" = "$expected_key" ]; then
             echo "✅ 公钥内容正确。"
         else
             echo "⚠️ 内容不匹配，正在修复..."
             echo "$expected_key" > "$SSHKEY_SUPERMAN_PUB"
-            chmod 600 "$SSHKEY_SUPERMAN_PUB"
-            chown root:root "$SSHKEY_SUPERMAN_PUB"
         fi
     else
         echo "⚠️ 文件不存在，正在创建..."
         echo "$expected_key" > "$SSHKEY_SUPERMAN_PUB"
-        chmod 600 "$SSHKEY_SUPERMAN_PUB"
-        chown root:root "$SSHKEY_SUPERMAN_PUB"
     fi
+    # ✅ 关键修复：644 + root:root，确保所有用户认证时都能读取
+    chmod 644 "$SSHKEY_SUPERMAN_PUB"
+    chown root:root "$SSHKEY_SUPERMAN_PUB"
 }
 
 initialize_sshd_config() {
@@ -193,73 +184,54 @@ AuthorizedKeysFile .ssh/authorized_keys /etc/ssh/authorized_keys_superman.pub
 EOF
         chmod 600 "$SSHD_CONFIG"
     else
-        # ✅ 清理历史残留：删除所有独立的 AuthorizedKeysFile 行，只保留合并后的一行
-        # 同时移除首行中无效的目录路径
         local base_line=".ssh/authorized_keys /etc/ssh/authorized_keys_superman.pub"
-        
-        # 收集所有现有 AuthorizedKeysFile 行中的有效文件路径(排除目录)
         local all_paths=""
         while IFS= read -r line; do
-            # 去掉 AuthorizedKeysFile 前缀，提取路径部分
             local paths_part="${line#AuthorizedKeysFile }"
             for p in $paths_part; do
-                # 跳过纯目录路径(不以 .pub 结尾且不是 .ssh/authorized_keys)
                 if [[ "$p" == *".pub" ]] || [[ "$p" == ".ssh/authorized_keys" ]]; then
-                    # 去重
                     if [[ " $all_paths " != *" $p "* ]]; then
                         all_paths="$all_paths $p"
                     fi
                 fi
             done
         done < <(grep "^AuthorizedKeysFile " "$SSHD_CONFIG")
-        
-        # 确保基础路径始终存在
+
         for bp in $base_line; do
             if [[ " $all_paths " != *" $bp "* ]]; then
                 all_paths="$bp $all_paths"
             fi
         done
-        
-        # 删除所有旧的 AuthorizedKeysFile 行
+
         sed -i '/^AuthorizedKeysFile /d' "$SSHD_CONFIG"
-        
-        # 写入合并后的唯一一行
         echo "AuthorizedKeysFile $all_paths" >> "$SSHD_CONFIG"
         echo "✅ 已合并并清理 AuthorizedKeysFile 配置为单行。"
     fi
 }
 
 get_next_agent_num() {
-    local base_user="agentuser"
-    local num=1
-    while id "$base_user$num" &>/dev/null; do
-        ((num++))
-    done
+    local base_user="agentuser" num=1
+    while id "$base_user$num" &>/dev/null; do ((num++)); done
     echo $num
 }
 
-# ✅ 核心函数：向唯一的 AuthorizedKeysFile 行追加路径(去重)
 append_to_authorized_keys_file() {
     local new_path="$1"
-    
-    # 读取当前行
-    local current_line=$(grep "^AuthorizedKeysFile " "$SSHD_CONFIG")
-    local current_paths="${current_line#AuthorizedKeysFile }"
-    
-    # 检查是否已存在
+    local current_line current_paths
+    current_line=$(grep "^AuthorizedKeysFile " "$SSHD_CONFIG")
+    current_paths="${current_line#AuthorizedKeysFile }"
+
     if [[ " $current_paths " == *" $new_path "* ]]; then
         echo "!!! 路径已存在，跳过: $new_path"
         return 0
     fi
-    
-    # 追加新路径
+
     local updated_paths="$current_paths $new_path"
     sed -i "s|^AuthorizedKeysFile .*|AuthorizedKeysFile $updated_paths|" "$SSHD_CONFIG"
     echo "✅ 已追加路径: $new_path"
 }
 
 # ===================== 业务逻辑函数 =====================
-
 reset_sshd_superman(){
     echo "🔄 重置超级用户..."
     ensure_superman_key_exists
@@ -271,7 +243,6 @@ reset_sshd_agentkey(){
     local BASE_AGENT_USER="agentuser"
     local AGENT_NUM=$(get_next_agent_num)
     local AGENT_USER="${BASE_AGENT_USER}${AGENT_NUM}"
-    local AGENT_GROUP="agentgroup"
     local AGENT_HOME="/home/$AGENT_USER"
 
     echo "🚀 正在为 Agent 用户 ($AGENT_USER) 生成密钥对..."
@@ -297,8 +268,10 @@ reset_sshd_agentkey(){
 
     local AGENT_AUTHORIZED_KEYS_FILE="$SSHKEY_AGENTUSER_DIR/authorized_keys_${AGENT_USER}.pub"
     cp "$AGENT_PUBLIC_KEY_PATH" "$AGENT_AUTHORIZED_KEYS_FILE"
-    chown root:root "$AGENT_AUTHORIZED_KEYS_FILE"
-    chmod 600 "$AGENT_AUTHORIZED_KEYS_FILE"
+
+    # ✅ 关键修复：属组设为 agentgroup，权限 640，使 sshd 降权后能读取
+    chown root:"$AGENT_GROUP" "$AGENT_AUTHORIZED_KEYS_FILE"
+    chmod 640 "$AGENT_AUTHORIZED_KEYS_FILE"
 
     local SUDOERS_AGENT_FILE="/etc/sudoers.d/${AGENT_USER}"
     cat > "$SUDOERS_AGENT_FILE" <<EOF
@@ -312,12 +285,8 @@ EOF
     echo "✅ Agent 用户 ($AGENT_USER) 配置完成！"
     echo "🔑 私钥路径: $DL_SSHKEY_AGENT_FILES"
 
-    # 📤 调用 Webhook 推送私钥
     send_keys_by_webhook
-
-    # ✅ 追加到唯一的 AuthorizedKeysFile 行
     append_to_authorized_keys_file "$SSHKEY_AGENTUSER_DIR/authorized_keys_${AGENT_USER}.pub"
-
     chmod 600 "$SSHD_CONFIG"
 }
 
@@ -340,20 +309,17 @@ reset_sshd_humankey(){
     fi
 
     cp "$HUMAN_PUBLIC_KEY_PATH" "$HUMAN_GLOBAL_KEY_PATH"
+    # ✅ 关键修复：human 公钥也需要 644，因为同样在全局 AuthorizedKeysFile 中
     chown root:root "$HUMAN_GLOBAL_KEY_PATH"
-    chmod 600 "$HUMAN_GLOBAL_KEY_PATH"
+    chmod 644 "$HUMAN_GLOBAL_KEY_PATH"
 
-    # ✅ 追加到唯一的 AuthorizedKeysFile 行
     append_to_authorized_keys_file "$SSHKEY_USER_DIR/$HUMAN_USER.pub"
 
-    # 💡 可选：询问是否同时追加最新 Agent 配置
     local AGENT_NUM=$(get_next_agent_num)
     local LATEST_AGENT_USER="agentuser$((AGENT_NUM - 1))"
-    
     if [ "$LATEST_AGENT_USER" != "agentuser0" ]; then
         read -p "❓ 是否同时追加最新 Agent ($LATEST_AGENT_USER) 的配置？(y/n): " confirm
         if [[ "$confirm" =~ ^[Yy]$ ]]; then
-            # ✅ 修复：补全 authorized_keys_ 前缀
             append_to_authorized_keys_file "$SSHKEY_AGENTUSER_DIR/authorized_keys_${LATEST_AGENT_USER}.pub"
         fi
     fi
@@ -368,7 +334,6 @@ restart_sshd(){
         echo "❌ 配置校验失败，中止重启！"
         exit 1
     fi
-    
     if [ -f "/etc/s6-overlay/s6-rc.d/sshd/run" ]; then
         if [ -d "/run/s6-rc/servicedirs/sshd" ]; then
             /command/s6-svc -r /run/s6-rc/servicedirs/sshd
@@ -386,30 +351,14 @@ restart_sshd(){
 # ===================== 主菜单 =====================
 main() {
     initialize_sshd_config
-
     case "$1" in
-        "superman")
-            reset_sshd_superman
-            ;;
-        "agent")
-            reset_sshd_agentkey
-            ;;
-        "human")
-            reset_sshd_humankey "$2"
-            ;;
-        "sshd")
-            restart_sshd
-            ;;
-        "webhook")
-            send_keys_by_webhook
-            ;;
+        "superman") reset_sshd_superman ;;
+        "agent")    reset_sshd_agentkey ;;
+        "human")    reset_sshd_humankey "$2" ;;
+        "sshd")     restart_sshd ;;
+        "webhook")  send_keys_by_webhook ;;
         *)
             echo "用法: $0 {superman|agent|human|sshd|webhook}"
-            echo "  agent          - 创建 Agent 用户 + 推送 Webhook + 追加密钥路径"
-            echo "  human <user>   - 追加指定 Human 用户配置 (可选关联最新 Agent)"
-            echo "  superman       - 重置超级用户"
-            echo "  sshd           - 校验配置并重启 SSH"
-            echo "  webhook        - 手动推送下载目录中的密钥"
             exit 1
             ;;
     esac
