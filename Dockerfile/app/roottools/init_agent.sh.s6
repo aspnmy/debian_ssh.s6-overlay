@@ -7,10 +7,133 @@ SCRIPT_NAME="setRootKey_Cli.sh.s6"
 AGENT_KEYS_DIR="/etc/ssh/authorized_keys_agentuser"
 AGENT_GROUP="agentgroup"
 
-# --- 函数定义 ---
+# --- 基础日志函数 ---
 log_info() { echo "[INFO] $1"; }
 log_error() { echo "[ERROR] $1"; }
 
+# --- 核心管理函数：支持单个/批量删除 Agent 用户 ---
+manage_agent_users() {
+    log_info "正在检查 Agent 用户..."
+    local AGENT_GROUP_ID
+    AGENT_GROUP_ID=$(getent group "$AGENT_GROUP" | cut -d: -f3)
+    
+    if [ -z "$AGENT_GROUP_ID" ]; then
+        log_error "❌ 用户组 '$AGENT_GROUP' 不存在。请先运行选项 3。"
+        show_menu
+        return
+    fi
+
+    # 获取属于该组的所有用户
+    local agent_users
+    agent_users=$(awk -F: -v gid="$AGENT_GROUP_ID" '$4 == gid { print $1 }' /etc/passwd)
+
+    if [ -z "$agent_users" ]; then
+        echo "📊 当前没有用户属于 $AGENT_GROUP 组。"
+        show_menu
+        return
+    fi
+
+    # 打印列表
+    echo ""
+    echo "📊 当前 Agent 用户列表："
+    local count=0
+    while IFS= read -r user; do
+        ((count++))
+        echo "  [$count] $user"
+    done <<< "$agent_users"
+    echo "📊 总共找到 $count 个 Agent 用户。"
+    echo ""
+    
+    # ✅ 支持空格或逗号分隔输入多个用户名
+    read -p "⚠️  请输入要删除的用户名 (多个用空格/逗号分隔，回车取消): " target_input
+    
+    if [ -z "$target_input" ]; then
+        log_info "已取消操作。"
+        show_menu
+        return
+    fi
+
+    # 统一分隔符并解析为数组
+    local normalized_input="${target_input//,/ }"
+    local target_arr=()
+    read -ra target_arr <<< "$normalized_input"
+
+    # 校验输入合法性(防误删非Agent用户)
+    local valid_users=()
+    local invalid_users=()
+    for u in "${target_arr[@]}"; do
+        u=$(echo "$u" | xargs) # 去除首尾空白
+        [ -z "$u" ] && continue
+        
+        if echo "$agent_users" | grep -qx "$u"; then
+            valid_users+=("$u")
+        else
+            invalid_users+=("$u")
+        fi
+    done
+
+    if [ ${#invalid_users[@]} -gt 0 ]; then
+        log_error "❌ 以下用户无效或不属于 $AGENT_GROUP，已自动跳过:"
+        printf '     %s\n' "${invalid_users[@]}"
+    fi
+
+    if [ ${#valid_users[@]} -eq 0 ]; then
+        log_error "❌ 没有有效的 Agent 用户可供删除。"
+        show_menu
+        return
+    fi
+
+    # 二次确认
+    echo ""
+    log_info "即将删除以下 ${#valid_users[@]} 个用户及其关联配置:"
+    printf '     %s\n' "${valid_users[@]}"
+    read -p "❗ 确认执行删除？(y/N): " confirm
+    
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        log_info "已取消删除。"
+        show_menu
+        return
+    fi
+
+    # 执行批量清理
+    local success_count=0
+    for target_user in "${valid_users[@]}"; do
+        echo "----------------------------------------"
+        log_info "🗑️  正在清理: $target_user"
+        
+        # 1. 删除系统用户及家目录
+        if userdel -r "$target_user" 2>/dev/null; then
+            log_info "   ✅ 系统用户及家目录已删除"
+        else
+            log_error "   ❌ 删除系统用户失败 (可能有进程占用)"
+        fi
+
+        # 2. 删除 SSH 公钥文件
+        local pub_key_file="$AGENT_KEYS_DIR/authorized_keys_${target_user}.pub"
+        if [ -f "$pub_key_file" ]; then
+            rm -f "$pub_key_file"
+            log_info "   ✅ 公钥文件已删除: $(basename "$pub_key_file")"
+        fi
+
+        # 3. 删除 sudoers 提权配置
+        local sudoers_file="/etc/sudoers.d/${target_user}"
+        if [ -f "$sudoers_file" ]; then
+            rm -f "$sudoers_file"
+            log_info "   ✅ Sudoers 配置已删除"
+        fi
+        
+        ((success_count++))
+    done
+
+    echo "========================================"
+    log_info "✅ 批量清理完成！成功处理 $success_count 个用户。"
+    log_info "⚠️  提醒: 请手动编辑 /etc/ssh/sshd_config 移除已删用户的 AuthorizedKeysFile 路径，"
+    log_info "         然后运行 ./$SCRIPT_NAME sshd 重启 SSH 服务使配置生效。"
+    
+    show_menu
+}
+
+# --- 菜单与其他辅助函数 ---
 show_menu() {
     echo ""
     echo "==========================================="
@@ -19,7 +142,7 @@ show_menu() {
     echo "1. 更新配置脚本-github ($SCRIPT_NAME)"
     echo "2. 更新配置脚本-国内 ($SCRIPT_NAME)"
     echo "3. 设置 Agent 用户组 (创建组/目录/修复文件权限)"
-    echo "4. 查看并管理 Agent 用户 (支持删除)"
+    echo "4. 查看并管理 Agent 用户 (支持批量删除)"
     echo "5. 运行原始初始化流程 (下载/设置脚本)"
     echo "0. 退出"
     echo "==========================================="
@@ -37,16 +160,16 @@ show_menu() {
 }
 
 update_script() {
-    log_info "开始更新配置脚本..."
-    download_script
+    log_info "开始更新配置脚本(GitHub)..."
+    download_script "$SH_URL"
     make_executable
     log_info "✅ 配置脚本更新完成！"
     show_menu
 }
 
 update_script_cn() {
-    log_info "开始更新配置脚本..."
-    download_script_cn
+    log_info "开始更新配置脚本(国内源)..."
+    download_script "$SH_CN_URL"
     make_executable
     log_info "✅ 配置脚本更新完成！"
     show_menu
@@ -56,90 +179,7 @@ setup_agent_group_menu() {
     log_info "开始设置 Agent 用户组..."
     create_agent_group
     ensure_agent_keys_directory
-    log_info "✅ Agent 用户组、目录及文件权限设置完成！"
-    show_menu
-}
-
-# ✅ 新增：查看并管理(删除) Agent 用户
-manage_agent_users() {
-    log_info "正在检查 Agent 用户..."
-    local AGENT_GROUP_ID
-    AGENT_GROUP_ID=$(getent group "$AGENT_GROUP" | cut -d: -f3)
-    
-    if [ -z "$AGENT_GROUP_ID" ]; then
-        log_error "❌ 用户组 '$AGENT_GROUP' 不存在。请先运行选项 3。"
-        show_menu
-        return
-    fi
-
-    # 获取属于该组的用户列表
-    local agent_users
-    agent_users=$(awk -F: -v gid="$AGENT_GROUP_ID" '$4 == gid { print $1 }' /etc/passwd)
-
-    if [ -z "$agent_users" ]; then
-        echo "📊 当前没有用户属于 $AGENT_GROUP 组。"
-        show_menu
-        return
-    fi
-
-    echo ""
-    echo "📊 当前 Agent 用户列表："
-    local count=0
-    while IFS= read -r user; do
-        ((count++))
-        echo "  [$count] $user"
-    done <<< "$agent_users"
-    echo "📊 总共找到 $count 个 Agent 用户。"
-    echo ""
-    
-    read -p "⚠️  请输入要删除的 Agent 用户名 (直接回车取消): " target_user
-    
-    if [ -z "$target_user" ]; then
-        log_info "已取消删除操作。"
-        show_menu
-        return
-    fi
-
-    # 验证输入的用户是否真的在列表中且属于该组
-    if ! echo "$agent_users" | grep -qx "$target_user"; then
-        log_error "❌ 用户 '$target_user' 不在 Agent 用户列表中，或不属于 $AGENT_GROUP 组。拒绝删除。"
-        show_menu
-        return
-    fi
-
-    read -p "❗ 确认删除用户 '$target_user' 及其家目录？(y/N): " confirm
-    if [[ "$confirm" =~ ^[Yy]$ ]]; then
-        log_info "正在删除用户: $target_user ..."
-        
-        # 1. 删除系统用户及家目录
-        if userdel -r "$target_user" 2>/dev/null; then
-            log_info "✅ 系统用户 $target_user 已删除。"
-        else
-            log_error "❌ 删除系统用户失败，请检查是否有进程正在使用该用户。"
-        fi
-
-        # 2. 删除对应的公钥文件
-        local pub_key_file="$AGENT_KEYS_DIR/authorized_keys_${target_user}.pub"
-        if [ -f "$pub_key_file" ]; then
-            rm -f "$pub_key_file"
-            log_info "✅ 已删除对应公钥文件: $pub_key_file"
-        else
-            log_info "ℹ️  未找到对应公钥文件: $pub_key_file (可能已被手动删除)"
-        fi
-
-        # 3. 删除 sudoers 配置
-        local sudoers_file="/etc/sudoers.d/${target_user}"
-        if [ -f "$sudoers_file" ]; then
-            rm -f "$sudoers_file"
-            log_info "✅ 已删除 sudoers 配置: $sudoers_file"
-        fi
-
-        # 4. 提示清理 sshd_config
-        log_info "⚠️  注意: 请手动编辑 /etc/ssh/sshd_config 移除该用户的 AuthorizedKeysFile 路径，然后运行 ./$SCRIPT_NAME sshd 重启服务。"
-    else
-        log_info "已取消删除。"
-    fi
-    
+    log_info "✅ Agent 用户组、目录及历史文件权限修复完成！"
     show_menu
 }
 
@@ -147,64 +187,49 @@ run_original_flow() {
     log_info "开始执行原始一键加固准备流程..."
     create_agent_group
     ensure_agent_keys_directory
-    download_script
+    download_script "$SH_URL"
     make_executable
-
-    log_info ""
-    log_info "==========================================="
     log_info "✅ 一键加固准备流程完成！"
-    log_info "==========================================="
     show_menu
 }
 
 create_agent_group() {
     log_info "检查用户组: $AGENT_GROUP"
     if ! getent group "$AGENT_GROUP" > /dev/null; then
-        log_info "创建用户组: $AGENT_GROUP"
         if groupadd "$AGENT_GROUP"; then
             log_info "✅ 用户组 $AGENT_GROUP 创建成功"
         else
-            log_error "❌ 创建用户组 $AGENT_GROUP 失败"
-            exit 1
+            log_error "❌ 创建用户组失败"; exit 1
         fi
     else
-        log_info "ℹ️  用户组 $AGENT_GROUP 已存在"
+        log_info "!!!  用户组 $AGENT_GROUP 已存在"
     fi
 }
 
-# ✅ 修复：增加对目录下现有 .pub 文件的权限校验与修复
+# ✅ 修复历史遗留的 .pub 文件权限问题
 ensure_agent_keys_directory() {
-    log_info "检查 agent 公钥存放目录: $AGENT_KEYS_DIR"
+    log_info "检查并修复目录及文件权限: $AGENT_KEYS_DIR"
     
     if ! getent group "$AGENT_GROUP" > /dev/null; then
-        log_error "❌ 预期的用户组 $AGENT_GROUP 不存在，无法继续。"
-        exit 1
+        log_error "❌ 依赖的用户组 $AGENT_GROUP 不存在"; exit 1
     fi
 
-    # 1. 检查和修复目录权限
-    if [ ! -d "$AGENT_KEYS_DIR" ]; then
-        log_info "目录 $AGENT_KEYS_DIR 不存在，正在创建..."
-        if ! mkdir -p "$AGENT_KEYS_DIR"; then
-            log_error "❌ 创建目录 $AGENT_KEYS_DIR 失败。"
-            exit 1
-        fi
-    fi
-
-    local current_perms current_owner
-    current_perms=$(stat -c "%a" "$AGENT_KEYS_DIR")
-    current_owner=$(stat -c "%U:%G" "$AGENT_KEYS_DIR")
-
-    if [ "$current_perms" != "750" ] || [ "$current_owner" != "root:$AGENT_GROUP" ]; then
-        log_info "修正目录权限和所有者为 750, root:$AGENT_GROUP ..."
+    # 1. 确保目录存在且权限正确
+    [ ! -d "$AGENT_KEYS_DIR" ] && mkdir -p "$AGENT_KEYS_DIR"
+    
+    local dir_perms dir_owner
+    dir_perms=$(stat -c "%a" "$AGENT_KEYS_DIR")
+    dir_owner=$(stat -c "%U:%G" "$AGENT_KEYS_DIR")
+    
+    if [ "$dir_perms" != "750" ] || [ "$dir_owner" != "root:$AGENT_GROUP" ]; then
         chmod 750 "$AGENT_KEYS_DIR"
         chown root:"$AGENT_GROUP" "$AGENT_KEYS_DIR"
-        log_info "✅ 目录权限已修正。"
+        log_info "🔧 已修正目录权限 -> 750 root:$AGENT_GROUP"
     else
-        log_info "✅ 目录权限正确 (750, root:$AGENT_GROUP)。"
+        log_info "✅ 目录权限正确"
     fi
 
-    # 2. ✅ 新增：遍历并修复目录下所有 .pub 文件的权限
-    log_info "正在检查并修复 $AGENT_KEYS_DIR 下的公钥文件权限..."
+    # 2. 遍历修复目录下所有 .pub 文件权限 (解决 sshd Permission denied)
     local fixed_count=0
     if compgen -G "$AGENT_KEYS_DIR/*.pub" > /dev/null; then
         for pub_file in "$AGENT_KEYS_DIR"/*.pub; do
@@ -212,66 +237,43 @@ ensure_agent_keys_directory() {
             f_perms=$(stat -c "%a" "$pub_file")
             f_owner=$(stat -c "%U:%G" "$pub_file")
             
-            # 期望权限: 640, 期望属主: root:agentgroup
             if [ "$f_perms" != "640" ] || [ "$f_owner" != "root:$AGENT_GROUP" ]; then
                 chown root:"$AGENT_GROUP" "$pub_file"
                 chmod 640 "$pub_file"
-                log_info "   🔧 已修复: $(basename "$pub_file") -> 640 root:$AGENT_GROUP"
+                log_info "   🔧 修复文件: $(basename "$pub_file") -> 640 root:$AGENT_GROUP"
                 ((fixed_count++))
             fi
         done
     fi
 
     if [ "$fixed_count" -eq 0 ]; then
-        log_info "✅ 所有公钥文件权限均正确 (640, root:$AGENT_GROUP)。"
+        log_info "✅ 所有公钥文件权限均正确 (640)"
     else
-        log_info "✅ 共修复了 $fixed_count 个公钥文件的权限。"
+        log_info "✅ 共修复了 $fixed_count 个错误的公钥文件权限"
     fi
 }
 
 download_script() {
-    log_info "正在下载配置脚本: $SH_URL"
-    if [ -f "$SCRIPT_NAME" ]; then
-        log_info "发现旧脚本文件，正在删除..."
-        rm -f "$SCRIPT_NAME"
+    local url="$1"
+    log_info "正在下载: $url"
+    [ -f "$SCRIPT_NAME" ] && rm -f "$SCRIPT_NAME"
+    
+    if ! wget --tries=3 --timeout=30 "$url" -O "$SCRIPT_NAME"; then
+        log_error "下载失败: $url"; exit 1
     fi
-
-    if ! wget --tries=3 --timeout=30 "$SH_URL" -O "$SCRIPT_NAME"; then
-        log_error "下载脚本失败: $SH_URL"
-        exit 1
-    fi
-    log_info "✅ 脚本下载成功: $SCRIPT_NAME"
-}
-
-download_script_cn() {
-    log_info "正在下载配置脚本: $SH_CN_URL"
-    if [ -f "$SCRIPT_NAME" ]; then
-        log_info "发现旧脚本文件，正在删除..."
-        rm -f "$SCRIPT_NAME"
-    fi
-
-    if ! wget --tries=3 --timeout=30 "$SH_CN_URL" -O "$SCRIPT_NAME"; then
-        log_error "下载脚本失败: $SH_CN_URL"
-        exit 1
-    fi
-    log_info "✅ 脚本下载成功: $SCRIPT_NAME"
+    log_info "✅ 下载成功"
 }
 
 make_executable() {
-    log_info "设置脚本执行权限: $SCRIPT_NAME"
-    if ! chmod +x "$SCRIPT_NAME"; then
-        log_error "设置执行权限失败: $SCRIPT_NAME"
-        exit 1
-    fi
-    log_info "✅ 执行权限设置成功"
+    chmod +x "$SCRIPT_NAME" && log_info "✅ 已赋予执行权限"
 }
 
-# --- 主流程 ---
+# --- 主入口 ---
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     show_menu
 else
     create_agent_group
     ensure_agent_keys_directory
-    download_script
+    download_script "$SH_URL"
     make_executable
 fi
