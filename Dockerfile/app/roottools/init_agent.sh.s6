@@ -10,25 +10,32 @@ AGENT_GROUP="agentgroup"
 # --- 基础日志函数 ---
 log_info() { echo "[INFO] $1"; }
 log_error() { echo "[ERROR] $1"; }
+log_warn() { echo "[WARN] $1"; }
 
-# --- 核心管理函数：支持单个/批量删除 Agent 用户 ---
-manage_agent_users() {
-    log_info "正在检查 Agent 用户..."
+# --- 获取 Agent 用户数组（公共辅助函数）---
+get_agent_users_array() {
     local AGENT_GROUP_ID
     AGENT_GROUP_ID=$(getent group "$AGENT_GROUP" | cut -d: -f3)
     
     if [ -z "$AGENT_GROUP_ID" ]; then
-        log_error "❌ 用户组 '$AGENT_GROUP' 不存在。请先运行选项 3。"
-        show_menu
-        return
+        return 1
     fi
 
-    # 获取属于该组的所有用户
-    local agent_users
-    agent_users=$(awk -F: -v gid="$AGENT_GROUP_ID" '$4 == gid { print $1 }' /etc/passwd)
+    AGENT_USERS_ARR=()
+    while IFS= read -r user; do
+        [ -n "$user" ] && AGENT_USERS_ARR+=("$user")
+    done < <(awk -F: -v gid="$AGENT_GROUP_ID" '$4 == gid { print $1 }' /etc/passwd)
+    
+    [ ${#AGENT_USERS_ARR[@]} -eq 0 ] && return 1
+    return 0
+}
 
-    if [ -z "$agent_users" ]; then
-        echo "📊 当前没有用户属于 $AGENT_GROUP 组。"
+# --- 核心管理函数：支持单个/批量删除 Agent 用户 ---
+manage_agent_users() {
+    log_info "正在检查 Agent 用户..."
+    
+    if ! get_agent_users_array; then
+        log_error "❌ 用户组 '$AGENT_GROUP' 不存在或没有成员。请先运行选项 3。"
         show_menu
         return
     fi
@@ -37,10 +44,10 @@ manage_agent_users() {
     echo ""
     echo "📊 当前 Agent 用户列表："
     local count=0
-    while IFS= read -r user; do
+    for user in "${AGENT_USERS_ARR[@]}"; do
         ((count++))
         echo "  [$count] $user"
-    done <<< "$agent_users"
+    done
     echo "📊 总共找到 $count 个 Agent 用户。"
     echo ""
     
@@ -65,7 +72,12 @@ manage_agent_users() {
         u=$(echo "$u" | xargs) # 去除首尾空白
         [ -z "$u" ] && continue
         
-        if echo "$agent_users" | grep -qx "$u"; then
+        local found=0
+        for au in "${AGENT_USERS_ARR[@]}"; do
+            [ "$au" = "$u" ] && { found=1; break; }
+        done
+        
+        if [ "$found" -eq 1 ]; then
             valid_users+=("$u")
         else
             invalid_users+=("$u")
@@ -133,6 +145,197 @@ manage_agent_users() {
     show_menu
 }
 
+# --- 核心管理函数：管理 Agent 用户的免密服务 (sudoers) ---
+manage_agent_services() {
+    log_info "正在加载 Agent 用户列表..."
+    
+    if ! get_agent_users_array; then
+        log_error "❌ 用户组 '$AGENT_GROUP' 不存在或没有成员。请先运行选项 3。"
+        show_menu
+        return
+    fi
+
+    # 打印用户列表供选择
+    echo ""
+    echo "📊 请选择要操作的 Agent 用户："
+    for i in "${!AGENT_USERS_ARR[@]}"; do
+        echo "  [$((i+1))] ${AGENT_USERS_ARR[$i]}"
+    done
+    echo "  [0] 返回主菜单"
+    
+    read -p "请输入编号: " user_choice
+    if [[ "$user_choice" == "0" ]]; then show_menu; return; fi
+    
+    if ! [[ "$user_choice" =~ ^[0-9]+$ ]] || [ "$user_choice" -lt 1 ] || [ "$user_choice" -gt ${#AGENT_USERS_ARR[@]} ]; then
+        log_error "❌ 无效编号"
+        manage_agent_services
+        return
+    fi
+    
+    local target_user="${AGENT_USERS_ARR[$((user_choice-1))]}"
+    local sudoers_file="/etc/sudoers.d/${target_user}"
+    
+    # 显示当前已有的免密服务
+    echo ""
+    log_info "🔑 用户 [$target_user] 当前的免密服务配置："
+    if [ -f "$sudoers_file" ]; then
+        local rules
+        rules=$(grep -E "^${target_user}[[:space:]]+ALL=" "$sudoers_file" 2>/dev/null | sed 's/.*NOPASSWD:[[:space:]]*//' )
+        if [ -n "$rules" ]; then
+            echo "$rules" | while IFS= read -r line; do
+                echo "  ✅ $line"
+            done
+        else
+            echo "  (无有效 NOPASSWD 配置)"
+        fi
+    else
+        echo "  (配置文件不存在)"
+    fi
+    echo ""
+    
+    # 选择操作类型
+    echo "  [1] ➕ 新增免密服务"
+    echo "  [2] ➖ 删除免密服务"
+    echo "  [0] ↩️  返回上一级"
+    read -p "请选择操作: " action_choice
+    
+    case $action_choice in
+        1) add_agent_service "$target_user" "$sudoers_file" ;;
+        2) remove_agent_service "$target_user" "$sudoers_file" ;;
+        0) manage_agent_services ;;
+        *) log_error "❌ 无效操作"; manage_agent_services ;;
+    esac
+}
+
+# 子功能：新增免密服务
+add_agent_service() {
+    local target_user="$1"
+    local sudoers_file="$2"
+    
+    read -p "请输入服务名称或命令 (如 nginx, docker, /usr/bin/systemctl): " service_name
+    [ -z "$service_name" ] && { log_error "❌ 输入为空"; manage_agent_services; return; }
+    
+    # 自动查询程序绝对路径
+    local bin_path
+    if [[ "$service_name" == /* ]]; then
+        bin_path="$service_name"  # 用户已输入绝对路径
+    else
+        bin_path=$(command -v "$service_name" 2>/dev/null)
+    fi
+    
+    if [ -z "$bin_path" ] || [ ! -x "$bin_path" ]; then
+        log_error "❌ 无法找到可执行程序: '$service_name'"
+        log_error "   请确认程序已安装，或直接输入绝对路径"
+        read -p "按回车继续..." _
+        manage_agent_services
+        return
+    fi
+    
+    log_info "🔍 已定位程序路径: $bin_path"
+    
+    # 检查是否已存在相同配置
+    if [ -f "$sudoers_file" ] && grep -qF "$bin_path" "$sudoers_file"; then
+        log_warn "⚠️  该服务的免密配置已存在，跳过添加"
+        read -p "按回车继续..." _
+        manage_agent_services
+        return
+    fi
+    
+    # 写入临时文件并进行 visudo 语法校验（防止写坏 sudoers）
+    local tmp_sudoers
+    tmp_sudoers=$(mktemp)
+    [ -f "$sudoers_file" ] && cp "$sudoers_file" "$tmp_sudoers"
+    
+    local rule="${target_user} ALL=(ALL) NOPASSWD: ${bin_path}"
+    echo "$rule" >> "$tmp_sudoers"
+    
+    if ! visudo -cf "$tmp_sudoers" > /dev/null 2>&1; then
+        log_error "❌ sudoers 语法校验失败，放弃写入"
+        rm -f "$tmp_sudoers"
+        read -p "按回车继续..." _
+        manage_agent_services
+        return
+    fi
+    
+    mv "$tmp_sudoers" "$sudoers_file"
+    chmod 440 "$sudoers_file"
+    chown root:root "$sudoers_file"
+    
+    log_info "✅ 已成功添加免密服务: $bin_path"
+    read -p "按回车继续..." _
+    manage_agent_services
+}
+
+# 子功能：删除免密服务
+remove_agent_service() {
+    local target_user="$1"
+    local sudoers_file="$2"
+    
+    if [ ! -f "$sudoers_file" ]; then
+        log_warn "⚠️  该用户暂无 sudoers 配置文件"
+        read -p "按回车继续..." _
+        manage_agent_services
+        return
+    fi
+    
+    # 读取所有 NOPASSWD 规则
+    local rules=()
+    while IFS= read -r line; do
+        [ -n "$line" ] && rules+=("$line")
+    done < <(grep -E "^${target_user}[[:space:]]+ALL=.*NOPASSWD:" "$sudoers_file" 2>/dev/null)
+    
+    if [ ${#rules[@]} -eq 0 ]; then
+        log_warn "⚠️  该用户暂无 NOPASSWD 免密规则"
+        read -p "按回车继续..." _
+        manage_agent_services
+        return
+    fi
+    
+    echo ""
+    echo "📋 当前免密服务列表："
+    for i in "${!rules[@]}"; do
+        local cmd
+        cmd=$(echo "${rules[$i]}" | sed 's/.*NOPASSWD:[[:space:]]*//')
+        echo "  [$((i+1))] $cmd"
+    done
+    echo "  [0] ↩️  取消"
+    
+    read -p "请输入要删除的编号: " del_choice
+    if [[ "$del_choice" == "0" ]]; then manage_agent_services; return; fi
+    
+    if ! [[ "$del_choice" =~ ^[0-9]+$ ]] || [ "$del_choice" -lt 1 ] || [ "$del_choice" -gt ${#rules[@]} ]; then
+        log_error "❌ 无效编号"
+        read -p "按回车继续..." _
+        manage_agent_services
+        return
+    fi
+    
+    local target_rule="${rules[$((del_choice-1))]}"
+    local escaped_rule
+    escaped_rule=$(printf '%s\n' "$target_rule" | sed 's/[\/&]/\\&/g')
+    
+    # 从文件中精确移除该行
+    local tmp_sudoers
+    tmp_sudoers=$(mktemp)
+    grep -vxF "$target_rule" "$sudoers_file" > "$tmp_sudoers"
+    
+    # 如果移除后文件为空或只剩注释，直接删除配置文件
+    local remaining_rules
+    remaining_rules=$(grep -cE "^${target_user}[[:space:]]+ALL=" "$tmp_sudoers" 2>/dev/null)
+    
+    if [ "$remaining_rules" -eq 0 ]; then
+        rm -f "$sudoers_file" "$tmp_sudoers"
+        log_info "✅ 已删除所有免密规则，sudoers 配置文件已移除"
+    else
+        mv "$tmp_sudoers" "$sudoers_file"
+        chmod 440 "$sudoers_file"
+        log_info "✅ 已删除免密服务: $(echo "$target_rule" | sed 's/.*NOPASSWD:[[:space:]]*//')"
+    fi
+    
+    read -p "按回车继续..." _
+    manage_agent_services
+}
+
 # --- 菜单与其他辅助函数 ---
 show_menu() {
     echo ""
@@ -143,17 +346,19 @@ show_menu() {
     echo "2. 更新配置脚本-国内 ($SCRIPT_NAME)"
     echo "3. 设置 Agent 用户组 (创建组/目录/修复文件权限)"
     echo "4. 查看并管理 Agent 用户 (支持批量删除)"
-    echo "5. 运行原始初始化流程 (下载/设置脚本)"
+    echo "5. 管理 Agent 免密服务 (新增/删除 sudoers)"
+    echo "6. 运行原始初始化流程 (下载/设置脚本)"
     echo "0. 退出"
     echo "==========================================="
-    read -p "请选择操作 (0-5): " choice
+    read -p "请选择操作 (0-6): " choice
 
     case $choice in
         1) update_script ;;
         2) update_script_cn ;;
         3) setup_agent_group_menu ;;
         4) manage_agent_users ;;
-        5) run_original_flow ;;
+        5) manage_agent_services ;;
+        6) run_original_flow ;;
         0) exit 0 ;;
         *) echo "❌ 无效选项，请重新选择。"; show_menu ;;
     esac
