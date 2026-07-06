@@ -315,26 +315,31 @@ validate_email() {
 
 # --- 新增：Webhook 发送模式 ---
 send_keys_by_webhook() {
-    # 检查是否设置了 WEBHOOK_URL 环境变量
+    # 1. 检查环境变量
     if [ -z "$WEBHOOK_URL" ]; then
         echo "❌ 错误: 环境变量 WEBHOOK_URL 未设置。"
         echo "请使用 export WEBHOOK_URL='your_webhook_url_here' 设置。"
         return 1
     fi
 
+    # 2. 检查目录是否存在
     if [ ! -d "$DL_SSHKEY_DIR" ]; then
         echo "❌ 目录不存在：$DL_SSHKEY_DIR"
         return 1
     fi
 
-    # 检查 curl 是否可用
+    # 3. 检查 curl 和 jq 是否可用
     if ! command -v curl &> /dev/null; then
         echo "❌ 错误: curl 命令未安装，无法发送 Webhook 请求。"
         echo "请安装 curl: apt-get install -y curl"
         return 1
     fi
+    if ! command -v jq &> /dev/null; then
+        echo "❌ 错误: jq 命令未安装，无法安全处理 JSON 数据。"
+        echo "请安装 jq: apt-get install -y jq"
+        return 1
+    fi
 
-    # 使用 null 分隔符安全处理文件名（含空格/特殊字符）
     local sent_count=0
     local failed_count=0
 
@@ -343,41 +348,48 @@ send_keys_by_webhook() {
         if [ -f "$file" ]; then
             filename=$(basename "$file")
             # 从文件名提取时间戳和用户名 (假设格式为 timestamp_username)
-            # 注意：这里不再假设第二部分是邮箱，而是用户名
             local extracted_info=$(echo "$filename" | sed 's/\([^_]*\)_\(.*\)/\1 \2/')
             local timestamp=$(echo "$extracted_info" | awk '{print $1}')
-            local username=$(echo "$extracted_info" | awk '{print $2}') # 修改变量名为 username
+            local username=$(echo "$extracted_info" | awk '{print $2}')
 
-            # 移除 validate_email 验证，并改为检查 username 是否非空
-            # 也可以增加一个对 username 格式的简单检查，比如必须是字母数字下划线组合
+            # 校验用户名格式
             if [ -n "$timestamp" ] && [ -n "$username" ] && [[ "$username" =~ ^[a-zA-Z0-9_-]+$ ]]; then 
-                 # 读取私钥文件内容
-                 private_key_content=$(cat "$file")
+                # 读取私钥文件内容
+                private_key_content=$(cat "$file")
 
-                 # 构造 JSON 载荷
-                 # 注意：将 user_email 改为 username，以匹配实际用途
-                 local json_payload="{\"action\": \"new_ssh_key\", \"username\": \"$username\", \"timestamp\": \"$timestamp\", \"private_key\": $(printf '%s\n' "$private_key_content" | jq -Rs .)}"
-                 # echo "DEBUG PAYLOAD: $json_payload" # For debugging
+                # 构造符合目标 Webhook 要求的 JSON 载荷
+                # 使用 jq 来安全地转义私钥中的换行符和特殊字符，防止 JSON 格式损坏
+                local json_payload=$(jq -n \
+                    --arg msg "【${username}】-【${private_key_content}】" \
+                    '{
+                        "msgtype": "text",
+                        "text": {
+                            "content": $msg
+                        }
+                    }')
 
-                 echo "📤 正在发送给 $username (时间戳: $timestamp) ..."
-                 # 发送 POST 请求到 Webhook URL
-                 if response_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST -H "Content-Type: application/json" -d "$json_payload" "$WEBHOOK_URL"); then
-                     if [ "$response_code" -eq 200 ]; then
-                         echo "✅ Webhook 发送成功至 $username (HTTP $response_code)"
-                         rm -f "$file" # 删除已发送的文件
-                         ((sent_count++))
-                     else
-                         echo "❌ Webhook 接收方返回错误 HTTP 状态码: $response_code"
-                         ((failed_count++))
-                     fi
-                 else
-                     echo "❌ Webhook 请求失败: $username (时间戳: $timestamp)"
-                     # curl 命令失败时，保留文件以便后续重试
-                     ((failed_count++))
-                 fi
+                echo "📤 正在发送给 $username (时间戳: $timestamp) ..."
+                
+                # 发送 POST 请求到 Webhook URL
+                if response_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+                    -H "Content-Type: application/json" \
+                    -d "$json_payload" \
+                    "$WEBHOOK_URL"); then
+                    
+                    if [ "$response_code" -eq 200 ]; then
+                        echo "✅ Webhook 发送成功至 $username (HTTP $response_code)"
+                        rm -f "$file" # 删除已发送的文件
+                        ((sent_count++))
+                    else
+                        echo "❌ Webhook 接收方返回错误 HTTP 状态码: $response_code"
+                        ((failed_count++))
+                    fi
+                else
+                    echo "❌ Webhook 请求失败: $username (时间戳: $timestamp)"
+                    ((failed_count++))
+                fi
             else
                 echo "⚠️  跳过无效的文件名格式或用户名：$filename"
-                # 如果格式不对，保留文件以便人工检查
                 ((failed_count++))
             fi
         fi
@@ -389,7 +401,6 @@ send_keys_by_webhook() {
     echo "❌ 发送失败：$failed_count 个"
     echo "🗂️  目录剩余文件数：$(find "$DL_SSHKEY_DIR" -maxdepth 1 -type f | wc -l)"
 }
-
 # 重启 SSH 服务 (独立菜单项)
 restart_sshd(){
     echo "🔄 正在重启 SSH 服务..."
