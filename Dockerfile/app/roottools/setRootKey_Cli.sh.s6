@@ -248,7 +248,7 @@ append_to_authorized_keys_file() {
     
     # 检查是否已存在
     if [[ " $current_paths " == *" $new_path "* ]]; then
-        echo "ℹ️ 路径已存在，跳过: $new_path"
+        echo "!!! 路径已存在，跳过: $new_path"
         return 0
     fi
     
