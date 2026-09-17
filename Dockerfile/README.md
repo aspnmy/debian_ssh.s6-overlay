@@ -13,7 +13,9 @@
 
 - 集成了s6-overlay进程管理器的debian_ssh版本(容器内直接打开ssh端口22,可直接访问容器内业务)
 
-- 默认root密码root@#1314, 使用时请自行修改
+- **不设默认 root 密码（2026-09-17 起硬化）**：`passwd -l root` 锁死 root 密码，同时关闭密码登录
+  （`PasswordAuthentication no` + `PermitRootLogin prohibit-password`）—— **只保留公钥体系**：
+  root 仅可用事先投放的授权公钥登录（`/etc/ssh/authorized_keys_superman.pub` 等）
 - 默认的ssh端口是622,使用时请自行放通防火墙,用云服务器的还需要放通安全组
 - 默认网络模式为桥接,宿主机需要映射端口,如果使用host模式,可以直接访问622即可
 

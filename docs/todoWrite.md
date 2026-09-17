@@ -49,7 +49,13 @@
 2. ✅ superman公钥为设计特性（仅公钥无风险，私钥离线保管）
 3. 🟠 **无多架构支持** — s6-overlay 仅下载 x86_64，无 aarch64
 4. 🟠 **docker-compose.yaml 镜像 tag 硬编码** — 与构建版本脱钩
-5. 🟠 **默认 root 密码泄露** — README 明文 root@#1314
+5. ✅ **默认 root 密码已消除（2026-09-17）** — `base/Dockerfile` 不再 `chpasswd`，改 `passwd -l root` 锁死；
+   并置 `PasswordAuthentication no` + `PermitRootLogin prohibit-password`、写 `sshd_config.d/00-hardening.conf`
+   （sshd 语义是「首次出现的值生效」且 sshd_config 顶部有 Include，故必须同时写 drop-in）。
+   两处 README 已同步改述。顺带：删除 `apt install openssh-server` 时 Debian postinst 烤入的 3 枚 SSH host 私钥，
+   改由新增 s6 oneshot `ssh-host-keys`（`up` = 一行 `/usr/bin/ssh-keygen -A`，幂等）首启生成。
+   另：`roottools/setRootKey_Cli.sh.s6` 不再内置/写回 superman 公钥（superman 仅人工登录，公钥由外部投放），
+   其 `initialize_sshd_config()` 模板亦同步硬化。
 6. 🟡 **无健康检查** — Dockerfile 未定义 HEALTHCHECK
 7. 🟡 **无 CI/CD** — 缺少 GitHub Actions / 自动化构建
 8. 🟡 **build-baseimage 单文件过长** — ~150行含 Dockerfile 模板内嵌
