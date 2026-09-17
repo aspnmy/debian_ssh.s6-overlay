@@ -142,26 +142,42 @@ verify_sshd_config() {
     fi
 }
 
-# ✅ 修复：superman 公钥必须对所有用户可读(644)，因为它在全局 AuthorizedKeysFile 中
-ensure_superman_key_exists() {
-    local expected_key="ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAgEA1LQu/qYOWWPFXxCiVSCNnyB/aZwPaoEtODxK58bCslu+Y8VIMQGT4OOzgS3vmNfXGAO/LVYS47HDwaw1h6bjdo/uNz22EQ7eLB0JBIaAn9QUO0aknKQSjiZG3mhNSNjtUNWZwHKchI5xiY5LJRGNmqlx3rSzEKNi2rXguyVFzomL8fpGN+iI8s4Z3DlRCtECcFWasBQdadT/Z9oLLyv4LqO2W1dSKu2eNJm2jmJA//3yw5JLApTwWXlTKbV81vTuDTFb9hoPxI7oLrF4DXlMYEpuclkdo3Ss5G+eFFUjrNhFY+y0EgqL8c3f5JjBeYxrWnpzTEeh954Kaaa3Dj2lgOhgwNi1aJ4tA0h5TySaB6+1Vg8RI9sapE9MYMfTDM+TkOy5dpAKfhtfPWOdkykDY+3P0keXFCAe3WpJWECQyOSWyUhRIMnQ4/wPEqPrhVIa4DY+AEKuJirPYTowsdtnZxgnSAevz2WOZ+HXfaHXUqRAkf8Q+8GCCXXXVYuaFZ+QpdcltrY6MMdwUAxP17xTTEs/fSAwCKQ8cQeEchQ4qcpEAHWMEx4g1ivoqr14NMNbvgmAFDDghJr0NThfzKGeCn9SbCP/Bfr8pYsmuf+bva210j4FofudbO8VdxqnmTRlGy79Ka2ECAO20DxPjSonzxgbJvnOzA1wwWxqv1Xq9Kc="
+# ⚠️ 2026-09-17 规则变更（用户定）：superman 账户**只用于人工登录**；
+#    其私钥不在助手侧留存、也不在私库留存 → 本工具**不再内置 / 生成 / 写回任何 superman 公钥内容**。
+#    公钥来源只允许「外部投放」：
+#      · 环境变量 SUPERMAN_PUB_SRC=<公钥文件路径>（优先）
+#      · 或默认投放位 $SUPERMAN_PUB_FALLBACK
+#      · 或镜像构建期已预置在 $SSHKEY_SUPERMAN_PUB
+#    本函数只做「校验存在性 + 修权限(644 root:root)」；缺失时**拒绝伪造**并返回非零。
+#    ⚠️ 旧版本此处硬编码了一把 ssh-rsa 公钥并在"不匹配"时写回 —— 轮换后该行为会把新公钥
+#       覆盖回已弃用的旧公钥（已删除该逻辑）。
+#    ⚠️ 123 设备对本规则**豁免**：该机运维可自行留存/投放公钥副本。
+SUPERMAN_PUB_FALLBACK="/aspnmy/wwwroot/ssh_key/authorized_keys_superman.pub"
 
-    if [ -f "$SSHKEY_SUPERMAN_PUB" ]; then
-        local current_key
-        current_key=$(cat "$SSHKEY_SUPERMAN_PUB")
-        if [ "$current_key" = "$expected_key" ]; then
-            echo "✅ 公钥内容正确。"
-        else
-            echo "⚠️ 内容不匹配，正在修复..."
-            echo "$expected_key" > "$SSHKEY_SUPERMAN_PUB"
-        fi
-    else
-        echo "⚠️ 文件不存在，正在创建..."
-        echo "$expected_key" > "$SSHKEY_SUPERMAN_PUB"
+ensure_superman_key_exists() {
+    local src="${SUPERMAN_PUB_SRC:-}"
+    if [ -z "$src" ] && [ -r "$SUPERMAN_PUB_FALLBACK" ]; then
+        src="$SUPERMAN_PUB_FALLBACK"
     fi
-    # ✅ 关键修复：644 + root:root，确保所有用户认证时都能读取
+
+    # 仅在「本地未预置 + 提供了外部来源」时才安装；脚本自身不含任何密钥材料
+    if [ ! -s "$SSHKEY_SUPERMAN_PUB" ] && [ -n "$src" ] && [ -r "$src" ]; then
+        echo "ℹ️ 从外部来源安装 superman 公钥：$src"
+        cat "$src" > "$SSHKEY_SUPERMAN_PUB"
+    fi
+
+    if [ ! -s "$SSHKEY_SUPERMAN_PUB" ]; then
+        echo "❌ 未找到 superman 公钥：$SSHKEY_SUPERMAN_PUB"
+        echo "   本工具不再内置/生成 superman 公钥（该账户仅人工登录；私钥不在助手侧、不在私库留存）。"
+        echo "   请人工投放后再运行，或指定来源：SUPERMAN_PUB_SRC=<公钥文件> $0 superman"
+        return 1
+    fi
+
+    # ✅ 644 + root:root —— 它位于全局 AuthorizedKeysFile 中，认证时需所有用户可读
     chmod 644 "$SSHKEY_SUPERMAN_PUB"
     chown root:root "$SSHKEY_SUPERMAN_PUB"
+    echo "✅ superman 公钥就位：$(ssh-keygen -lf "$SSHKEY_SUPERMAN_PUB" 2>/dev/null | awk '{print $2}')"
+    return 0
 }
 
 initialize_sshd_config() {
@@ -170,9 +186,12 @@ initialize_sshd_config() {
 Port 622
 Port 722
 Port 1222
-PermitRootLogin yes
-PasswordAuthentication yes
+# ⚠️ 2026-09-17 硬化：只保留公钥体系（原为 PermitRootLogin yes + PasswordAuthentication yes，
+#    等于在公钥体系之外再开一条密码通道；与本系列镜像的登录面口径冲突）
+PermitRootLogin prohibit-password
+PasswordAuthentication no
 ChallengeResponseAuthentication no
+KbdInteractiveAuthentication no
 UsePAM yes
 X11Forwarding yes
 AllowTcpForwarding yes
@@ -234,9 +253,12 @@ append_to_authorized_keys_file() {
 # ===================== 业务逻辑函数 =====================
 reset_sshd_superman(){
     echo "🔄 重置超级用户..."
-    ensure_superman_key_exists
+    if ! ensure_superman_key_exists; then
+        echo "❌ superman 公钥未就位 → 中止（本工具不写入、不伪造任何密钥内容）"
+        return 1
+    fi
     append_to_authorized_keys_file "/etc/ssh/authorized_keys_superman.pub"
-    echo "✅ 超级用户公钥重置完成"
+    echo "✅ superman 公钥路径已就位（内容由人工/构建期提供，工具不代持）"
 }
 
 reset_sshd_agentkey(){
@@ -359,6 +381,8 @@ main() {
         "webhook")  send_keys_by_webhook ;;
         *)
             echo "用法: $0 {superman|agent|human|sshd|webhook}"
+            echo "  注: superman = 仅人工登录账户；公钥须外部投放（SUPERMAN_PUB_SRC=<文件> 或 $SUPERMAN_PUB_FALLBACK），"
+            echo "      本工具不内置/不生成/不写回其任何密钥内容（123 设备对此豁免）。"
             exit 1
             ;;
     esac
